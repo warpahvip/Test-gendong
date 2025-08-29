@@ -1,338 +1,484 @@
--- SCRIPT CARRIER (PENGGENDONG) - WORKING VERSION
--- Pastikan script ini berjalan di device yang akan menggendong
+-- Delta Executor Piggyback Carrier Script
+-- Compact Professional Design - Script untuk mengangkat orang lain
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 
 local LocalPlayer = Players.LocalPlayer
-local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
--- Variables
+-- Global Variables
 local isCarrying = false
-local carriedPlayer = nil
-local weld = nil
-local carryAnimation = nil
+local targetPlayer = nil
+local gui = nil
+local mainFrame = nil
+local playerButtons = {}
+local statusLabel = nil
+local carryConnection = nil
 
--- Get character safely
-local function getCharacter()
-    return LocalPlayer.Character
+-- Notification System
+local function showNotification(text, color)
+    local notification = Instance.new("ScreenGui")
+    notification.Name = "Notification"
+    notification.Parent = LocalPlayer.PlayerGui
+    
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 250, 0, 45)
+    frame.Position = UDim2.new(1, -270, 0, 20)
+    frame.BackgroundColor3 = color or Color3.fromRGB(30, 30, 35)
+    frame.BorderSizePixel = 0
+    frame.Parent = notification
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = frame
+    
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(70, 70, 80)
+    stroke.Thickness = 1
+    stroke.Parent = frame
+    
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -16, 1, 0)
+    label.Position = UDim2.new(0, 8, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.TextSize = 11
+    label.Font = Enum.Font.GothamMedium
+    label.TextWrapped = true
+    label.Parent = frame
+    
+    frame:TweenPosition(UDim2.new(1, -270, 0, 20), "Out", "Quad", 0.3)
+    
+    game:GetService("Debris"):AddItem(notification, 3)
+    wait(2.5)
+    frame:TweenPosition(UDim2.new(1, 0, 0, 20), "In", "Quad", 0.3)
 end
 
-local function getHumanoid()
-    local char = getCharacter()
-    return char and char:FindFirstChild("Humanoid")
-end
-
-local function getRootPart()
-    local char = getCharacter()
-    return char and char:FindFirstChild("HumanoidRootPart")
-end
-
--- Create GUI
-local gui = Instance.new("ScreenGui")
-gui.Name = "CarrierGUI"
-gui.ResetOnSpawn = false
-gui.Parent = PlayerGui
-
-local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 250, 0, 300)
-frame.Position = UDim2.new(0, 10, 0, 10)
-frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-frame.BorderSizePixel = 0
-frame.Parent = gui
-
-local corner = Instance.new("UICorner")
-corner.CornerRadius = UDim.new(0, 8)
-corner.Parent = frame
-
-local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, 0, 0, 40)
-title.Position = UDim2.new(0, 0, 0, 0)
-title.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-title.BorderSizePixel = 0
-title.Text = "CARRIER SYSTEM"
-title.TextColor3 = Color3.fromRGB(255, 255, 255)
-title.TextScaled = true
-title.Font = Enum.Font.GothamBold
-title.Parent = frame
-
-local titleCorner = Instance.new("UICorner")
-titleCorner.CornerRadius = UDim.new(0, 8)
-titleCorner.Parent = title
-
-local statusLabel = Instance.new("TextLabel")
-statusLabel.Size = UDim2.new(1, -20, 0, 30)
-statusLabel.Position = UDim2.new(0, 10, 0, 50)
-statusLabel.BackgroundTransparency = 1
-statusLabel.Text = "Ready to carry players"
-statusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
-statusLabel.TextScaled = true
-statusLabel.Font = Enum.Font.Gotham
-statusLabel.Parent = frame
-
-local playersFrame = Instance.new("ScrollingFrame")
-playersFrame.Size = UDim2.new(1, -20, 0, 180)
-playersFrame.Position = UDim2.new(0, 10, 0, 90)
-playersFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-playersFrame.BorderSizePixel = 0
-playersFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-playersFrame.ScrollBarThickness = 6
-playersFrame.Parent = frame
-
-local playersCorner = Instance.new("UICorner")
-playersCorner.CornerRadius = UDim.new(0, 6)
-playersCorner.Parent = playersFrame
-
-local layout = Instance.new("UIListLayout")
-layout.SortOrder = Enum.SortOrder.Name
-layout.Padding = UDim.new(0, 5)
-layout.Parent = playersFrame
-
-local releaseButton = Instance.new("TextButton")
-releaseButton.Size = UDim2.new(1, -20, 0, 25)
-releaseButton.Position = UDim2.new(0, 10, 0, 275)
-releaseButton.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
-releaseButton.BorderSizePixel = 0
-releaseButton.Text = "RELEASE PLAYER"
-releaseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-releaseButton.TextScaled = true
-releaseButton.Font = Enum.Font.GothamBold
-releaseButton.Visible = false
-releaseButton.Parent = frame
-
-local releaseCorner = Instance.new("UICorner")
-releaseCorner.CornerRadius = UDim.new(0, 4)
-releaseCorner.Parent = releaseButton
-
--- Carry function - FIXED AND SIMPLIFIED
-local function carryPlayer(targetPlayer)
-    local myChar = getCharacter()
-    local myRoot = getRootPart()
-    local myHumanoid = getHumanoid()
+-- Create Compact GUI
+local function createCarrierGUI()
+    if gui then gui:Destroy() end
     
-    if not myChar or not myRoot or not myHumanoid then
-        print("ERROR: My character not ready")
-        return
-    end
+    gui = Instance.new("ScreenGui")
+    gui.Name = "PiggybackCarrierGUI"
+    gui.Parent = LocalPlayer.PlayerGui
+    gui.ResetOnSpawn = false
     
-    if not targetPlayer.Character then
-        print("ERROR: Target player character not found")
-        return
-    end
+    -- Compact Main Frame (240x180)
+    mainFrame = Instance.new("Frame")
+    mainFrame.Name = "MainFrame"
+    mainFrame.Size = UDim2.new(0, 240, 0, 180)
+    mainFrame.Position = UDim2.new(0, 20, 0.5, -90)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+    mainFrame.BorderSizePixel = 0
+    mainFrame.Active = true
+    mainFrame.Draggable = true
+    mainFrame.Parent = gui
     
-    local targetChar = targetPlayer.Character
-    local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
-    local targetHumanoid = targetChar:FindFirstChild("Humanoid")
+    local gradient = Instance.new("UIGradient")
+    gradient.Color = ColorSequence.new{
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(22, 22, 28)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(14, 14, 18))
+    }
+    gradient.Rotation = 135
+    gradient.Parent = mainFrame
     
-    if not targetRoot or not targetHumanoid then
-        print("ERROR: Target character parts not found")
-        return
-    end
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 10)
+    corner.Parent = mainFrame
     
-    if isCarrying then
-        print("Already carrying someone")
-        return
-    end
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(55, 55, 65)
+    stroke.Thickness = 1
+    stroke.Parent = mainFrame
     
-    print("Starting to carry: " .. targetPlayer.Name)
+    -- Compact Title Bar
+    local titleBar = Instance.new("Frame")
+    titleBar.Size = UDim2.new(1, 0, 0, 35)
+    titleBar.BackgroundColor3 = Color3.fromRGB(25, 25, 32)
+    titleBar.BorderSizePixel = 0
+    titleBar.Parent = mainFrame
     
-    -- Set states
-    isCarrying = true
-    carriedPlayer = targetPlayer
+    local titleCorner = Instance.new("UICorner")
+    titleCorner.CornerRadius = UDim.new(0, 10)
+    titleCorner.Parent = titleBar
     
-    -- Update GUI
-    statusLabel.Text = "Carrying: " .. targetPlayer.Name
-    statusLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
-    releaseButton.Visible = true
-    playersFrame.Visible = false
+    local titleFix = Instance.new("Frame")
+    titleFix.Size = UDim2.new(1, 0, 0, 10)
+    titleFix.Position = UDim2.new(0, 0, 1, -10)
+    titleFix.BackgroundColor3 = Color3.fromRGB(25, 25, 32)
+    titleFix.BorderSizePixel = 0
+    titleFix.Parent = titleBar
     
-    -- Disable target movement
-    targetHumanoid.PlatformStand = true
+    -- Title Text
+    local titleText = Instance.new("TextLabel")
+    titleText.Size = UDim2.new(1, -60, 1, 0)
+    titleText.Position = UDim2.new(0, 12, 0, 0)
+    titleText.BackgroundTransparency = 1
+    titleText.Text = "Piggyback Carrier"
+    titleText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    titleText.TextSize = 13
+    titleText.Font = Enum.Font.GothamBold
+    titleText.TextXAlignment = Enum.TextXAlignment.Left
+    titleText.Parent = titleBar
     
-    -- Create weld for attachment
-    weld = Instance.new("WeldConstraint")
-    weld.Part0 = myRoot
-    weld.Part1 = targetRoot
-    weld.Parent = myRoot
+    -- Close Button
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Size = UDim2.new(0, 25, 0, 25)
+    closeBtn.Position = UDim2.new(1, -30, 0, 5)
+    closeBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    closeBtn.Text = "×"
+    closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    closeBtn.TextSize = 14
+    closeBtn.Font = Enum.Font.GothamBold
+    closeBtn.BorderSizePixel = 0
+    closeBtn.Parent = titleBar
     
-    -- Position target on back (piggyback style)
-    targetRoot.CFrame = myRoot.CFrame * CFrame.new(0, 1, -2)
+    local closeCorner = Instance.new("UICorner")
+    closeCorner.CornerRadius = UDim.new(0, 5)
+    closeCorner.Parent = closeBtn
     
-    -- Play animations
-    spawn(function()
-        wait(0.1)
-        
-        -- Carrier animation
-        local carryAnim = Instance.new("Animation")
-        carryAnim.AnimationId = "rbxassetid://507766388"
-        carryAnimation = myHumanoid:LoadAnimation(carryAnim)
-        carryAnimation:Play()
-        carryAnimation.Looped = true
-        
-        -- Carried animation
-        local carriedAnim = Instance.new("Animation")
-        carriedAnim.AnimationId = "rbxassetid://507777826"
-        local carriedAnimation = targetHumanoid:LoadAnimation(carriedAnim)
-        carriedAnimation:Play()
-        carriedAnimation.Looped = true
-        
-        -- Store carried animation reference
-        targetChar:SetAttribute("CarriedAnim", carriedAnimation)
+    -- Status Section
+    statusLabel = Instance.new("TextLabel")
+    statusLabel.Size = UDim2.new(1, -20, 0, 25)
+    statusLabel.Position = UDim2.new(0, 10, 0, 45)
+    statusLabel.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+    statusLabel.Text = "Status: Ready"
+    statusLabel.TextColor3 = Color3.fromRGB(100, 220, 100)
+    statusLabel.TextSize = 10
+    statusLabel.Font = Enum.Font.GothamMedium
+    statusLabel.BorderSizePixel = 0
+    statusLabel.Parent = mainFrame
+    
+    local statusCorner = Instance.new("UICorner")
+    statusCorner.CornerRadius = UDim.new(0, 6)
+    statusCorner.Parent = statusLabel
+    
+    -- Player List
+    local scrollFrame = Instance.new("ScrollingFrame")
+    scrollFrame.Size = UDim2.new(1, -20, 1, -110)
+    scrollFrame.Position = UDim2.new(0, 10, 0, 80)
+    scrollFrame.BackgroundColor3 = Color3.fromRGB(12, 12, 16)
+    scrollFrame.BorderSizePixel = 0
+    scrollFrame.ScrollBarThickness = 4
+    scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(80, 80, 90)
+    scrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    scrollFrame.Parent = mainFrame
+    
+    local scrollCorner = Instance.new("UICorner")
+    scrollCorner.CornerRadius = UDim.new(0, 6)
+    scrollCorner.Parent = scrollFrame
+    
+    local layout = Instance.new("UIListLayout")
+    layout.Padding = UDim.new(0, 3)
+    layout.Parent = scrollFrame
+    
+    local padding = Instance.new("UIPadding")
+    padding.PaddingAll = UDim.new(0, 6)
+    padding.Parent = scrollFrame
+    
+    -- Stop Button (Hidden initially)
+    local stopBtn = Instance.new("TextButton")
+    stopBtn.Size = UDim2.new(1, -20, 0, 25)
+    stopBtn.Position = UDim2.new(0, 10, 1, -35)
+    stopBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    stopBtn.Text = "Stop Carrying"
+    stopBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    stopBtn.TextSize = 11
+    stopBtn.Font = Enum.Font.GothamBold
+    stopBtn.BorderSizePixel = 0
+    stopBtn.Visible = false
+    stopBtn.Parent = mainFrame
+    
+    local stopCorner = Instance.new("UICorner")
+    stopCorner.CornerRadius = UDim.new(0, 6)
+    stopCorner.Parent = stopBtn
+    
+    -- Event Handlers
+    closeBtn.MouseButton1Click:Connect(function()
+        stopCarrying()
+        if carryConnection then carryConnection:Disconnect() end
+        gui:Destroy()
+        showNotification("Script closed", Color3.fromRGB(200, 50, 50))
     end)
     
-    print("SUCCESS: Now carrying " .. targetPlayer.Name)
+    stopBtn.MouseButton1Click:Connect(function()
+        stopCarrying()
+    end)
+    
+    return scrollFrame, stopBtn
 end
 
--- Release function - FIXED
-local function releasePlayer()
-    if not isCarrying or not carriedPlayer then
+-- Get Nearby Players
+local function updatePlayerList()
+    if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
         return
     end
     
-    print("Releasing: " .. carriedPlayer.Name)
-    
-    local targetChar = carriedPlayer.Character
-    if targetChar then
-        local targetHumanoid = targetChar:FindFirstChild("Humanoid")
-        local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
-        
-        -- Re-enable movement
-        if targetHumanoid then
-            targetHumanoid.PlatformStand = false
-        end
-        
-        -- Stop carried animation
-        local carriedAnim = targetChar:GetAttribute("CarriedAnim")
-        if carriedAnim then
-            carriedAnim:Stop()
-            carriedAnim:Destroy()
-            targetChar:SetAttribute("CarriedAnim", nil)
-        end
-        
-        -- Position safely
-        if targetRoot then
-            local myRoot = getRootPart()
-            if myRoot then
-                targetRoot.CFrame = myRoot.CFrame * CFrame.new(3, 0, 0)
-            end
-        end
-    end
-    
-    -- Remove weld
-    if weld then
-        weld:Destroy()
-        weld = nil
-    end
-    
-    -- Stop carrier animation
-    if carryAnimation then
-        carryAnimation:Stop()
-        carryAnimation:Destroy()
-        carryAnimation = nil
-    end
-    
-    -- Reset states
-    isCarrying = false
-    carriedPlayer = nil
-    
-    -- Update GUI
-    statusLabel.Text = "Ready to carry players"
-    statusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
-    releaseButton.Visible = false
-    playersFrame.Visible = true
-    
-    print("SUCCESS: Player released")
-end
-
--- Create player buttons
-local function updatePlayerList()
-    if isCarrying then return end
+    local scrollFrame, stopBtn = playerButtons.scrollFrame, playerButtons.stopBtn
+    if not scrollFrame then return end
     
     -- Clear existing buttons
-    for _, child in pairs(playersFrame:GetChildren()) do
+    for _, child in pairs(scrollFrame:GetChildren()) do
         if child:IsA("TextButton") then
             child:Destroy()
         end
     end
     
-    local myRoot = getRootPart()
-    if not myRoot then return end
+    local myPos = LocalPlayer.Character.HumanoidRootPart.Position
+    local nearbyPlayers = {}
     
-    local buttonsCreated = 0
-    
-    -- Create button for each nearby player
     for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character then
-            local playerRoot = player.Character:FindFirstChild("HumanoidRootPart")
-            if playerRoot then
-                local distance = (myRoot.Position - playerRoot.Position).Magnitude
-                
-                if distance <= 20 then -- Detection range
-                    local button = Instance.new("TextButton")
-                    button.Size = UDim2.new(1, -10, 0, 35)
-                    button.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-                    button.BorderSizePixel = 0
-                    button.Text = string.format("%s (%.0fm)", player.Name, distance)
-                    button.TextColor3 = Color3.fromRGB(255, 255, 255)
-                    button.TextScaled = true
-                    button.Font = Enum.Font.Gotham
-                    button.Parent = playersFrame
-                    
-                    local buttonCorner = Instance.new("UICorner")
-                    buttonCorner.CornerRadius = UDim.new(0, 4)
-                    buttonCorner.Parent = button
-                    
-                    -- CRITICAL FIX: Proper click event
-                    local targetPlayerRef = player -- Store reference
-                    button.MouseButton1Click:Connect(function()
-                        print("Button clicked for: " .. targetPlayerRef.Name)
-                        carryPlayer(targetPlayerRef)
-                    end)
-                    
-                    -- Hover effects
-                    button.MouseEnter:Connect(function()
-                        button.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
-                    end)
-                    
-                    button.MouseLeave:Connect(function()
-                        button.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-                    end)
-                    
-                    buttonsCreated = buttonsCreated + 1
-                end
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local distance = (player.Character.HumanoidRootPart.Position - myPos).Magnitude
+            if distance <= 30 then
+                table.insert(nearbyPlayers, {player = player, distance = math.floor(distance)})
             end
         end
     end
     
-    -- Update canvas size
-    playersFrame.CanvasSize = UDim2.new(0, 0, 0, buttonsCreated * 40)
+    -- Sort by distance
+    table.sort(nearbyPlayers, function(a, b) return a.distance < b.distance end)
+    
+    if #nearbyPlayers == 0 then
+        local noPlayerLabel = Instance.new("TextLabel")
+        noPlayerLabel.Size = UDim2.new(1, 0, 0, 30)
+        noPlayerLabel.BackgroundTransparency = 1
+        noPlayerLabel.Text = "No nearby players"
+        noPlayerLabel.TextColor3 = Color3.fromRGB(120, 120, 120)
+        noPlayerLabel.TextSize = 10
+        noPlayerLabel.Font = Enum.Font.Gotham
+        noPlayerLabel.Parent = scrollFrame
+        return
+    end
+    
+    -- Create player buttons
+    for _, data in pairs(nearbyPlayers) do
+        local player = data.player
+        local distance = data.distance
+        
+        local playerBtn = Instance.new("TextButton")
+        playerBtn.Size = UDim2.new(1, 0, 0, 28)
+        playerBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+        playerBtn.Text = ""
+        playerBtn.BorderSizePixel = 0
+        playerBtn.Parent = scrollFrame
+        
+        local btnCorner = Instance.new("UICorner")
+        btnCorner.CornerRadius = UDim.new(0, 5)
+        btnCorner.Parent = playerBtn
+        
+        local nameLabel = Instance.new("TextLabel")
+        nameLabel.Size = UDim2.new(1, -50, 1, 0)
+        nameLabel.Position = UDim2.new(0, 8, 0, 0)
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.Text = player.Name
+        nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        nameLabel.TextSize = 10
+        nameLabel.Font = Enum.Font.GothamMedium
+        nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+        nameLabel.Parent = playerBtn
+        
+        local distLabel = Instance.new("TextLabel")
+        distLabel.Size = UDim2.new(0, 40, 1, 0)
+        distLabel.Position = UDim2.new(1, -45, 0, 0)
+        distLabel.BackgroundTransparency = 1
+        distLabel.Text = distance .. "m"
+        distLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+        distLabel.TextSize = 9
+        distLabel.Font = Enum.Font.Gotham
+        distLabel.TextXAlignment = Enum.TextXAlignment.Right
+        distLabel.Parent = playerBtn
+        
+        -- Hover effect
+        playerBtn.MouseEnter:Connect(function()
+            TweenService:Create(playerBtn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(50, 50, 60)}):Play()
+        end)
+        
+        playerBtn.MouseLeave:Connect(function()
+            TweenService:Create(playerBtn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(35, 35, 42)}):Play()
+        end)
+        
+        -- Click to carry
+        playerBtn.MouseButton1Click:Connect(function()
+            startCarrying(player)
+        end)
+    end
 end
 
--- Release button event
-releaseButton.MouseButton1Click:Connect(function()
-    releasePlayer()
+-- Start Carrying
+function startCarrying(player)
+    if not player.Character or not LocalPlayer.Character then 
+        showNotification("Invalid target", Color3.fromRGB(200, 50, 50))
+        return 
+    end
+    
+    stopCarrying()
+    
+    targetPlayer = player
+    isCarrying = true
+    
+    if statusLabel then
+        statusLabel.Text = "Status: Carrying " .. player.Name
+        statusLabel.TextColor3 = Color3.fromRGB(220, 100, 100)
+    end
+    
+    if playerButtons.stopBtn then
+        playerButtons.stopBtn.Visible = true
+    end
+    
+    showNotification("Started carrying: " .. player.Name, Color3.fromRGB(50, 150, 50))
+end
+
+-- Stop Carrying
+function stopCarrying()
+    if not isCarrying then return end
+    
+    local carriedName = targetPlayer and targetPlayer.Name or "Unknown"
+    
+    -- Release target
+    if targetPlayer and targetPlayer.Character then
+        local targetHRP = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+        local targetHumanoid = targetPlayer.Character:FindFirstChildOfClass("Humanoid")
+        
+        if targetHRP then
+            -- Remove body movers
+            for _, mover in pairs(targetHRP:GetChildren()) do
+                if mover.Name:find("Piggyback") then
+                    mover:Destroy()
+                end
+            end
+            
+            -- Safe release position
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                local myHRP = LocalPlayer.Character.HumanoidRootPart
+                local releasePos = myHRP.Position + myHRP.CFrame.LookVector * 3
+                targetHRP.CFrame = CFrame.new(releasePos)
+            end
+        end
+        
+        if targetHumanoid then
+            targetHumanoid.PlatformStand = false
+            targetHumanoid.WalkSpeed = 16
+            targetHumanoid.JumpPower = 50
+        end
+    end
+    
+    isCarrying = false
+    targetPlayer = nil
+    
+    if statusLabel then
+        statusLabel.Text = "Status: Ready"
+        statusLabel.TextColor3 = Color3.fromRGB(100, 220, 100)
+    end
+    
+    if playerButtons.stopBtn then
+        playerButtons.stopBtn.Visible = false
+    end
+    
+    showNotification("Released: " .. carriedName, Color3.fromRGB(220, 150, 50))
+end
+
+-- Carrying Physics
+local function carryLoop()
+    if not isCarrying or not targetPlayer or not targetPlayer.Character then
+        return
+    end
+    
+    local myChar = LocalPlayer.Character
+    local targetChar = targetPlayer.Character
+    
+    if not myChar or not targetChar then 
+        stopCarrying()
+        return 
+    end
+    
+    local myHRP = myChar:FindFirstChild("HumanoidRootPart")
+    local targetHRP = targetChar:FindFirstChild("HumanoidRootPart")
+    
+    if not myHRP or not targetHRP then 
+        stopCarrying()
+        return 
+    end
+    
+    -- Check distance
+    local distance = (myHRP.Position - targetHRP.Position).Magnitude
+    if distance > 20 then
+        stopCarrying()
+        return
+    end
+    
+    -- Piggyback position (on back)
+    local backOffset = myHRP.CFrame * CFrame.new(0, 0.8, -1.5) * CFrame.Angles(math.rad(-5), 0, 0)
+    
+    -- Create or update body position
+    local bodyPos = targetHRP:FindFirstChild("PiggybackBP")
+    if not bodyPos then
+        bodyPos = Instance.new("BodyPosition")
+        bodyPos.Name = "PiggybackBP"
+        bodyPos.MaxForce = Vector3.new(4000, 4000, 4000)
+        bodyPos.P = 3000
+        bodyPos.D = 500
+        bodyPos.Parent = targetHRP
+    end
+    bodyPos.Position = backOffset.Position
+    
+    -- Create or update body angular velocity
+    local bodyAV = targetHRP:FindFirstChild("PiggybackBAV")
+    if not bodyAV then
+        bodyAV = Instance.new("BodyAngularVelocity")
+        bodyAV.Name = "PiggybackBAV"
+        bodyAV.MaxTorque = Vector3.new(2000, 2000, 2000)
+        bodyAV.AngularVelocity = Vector3.new(0, 0, 0)
+        bodyAV.Parent = targetHRP
+    end
+    
+    -- Disable target movement
+    local targetHumanoid = targetChar:FindFirstChildOfClass("Humanoid")
+    if targetHumanoid then
+        targetHumanoid.PlatformStand = true
+        targetHumanoid.WalkSpeed = 0
+        targetHumanoid.JumpPower = 0
+    end
+end
+
+-- Initialize
+local scrollFrame, stopBtn = createCarrierGUI()
+playerButtons.scrollFrame = scrollFrame
+playerButtons.stopBtn = stopBtn
+
+-- Main connection
+carryConnection = RunService.Heartbeat:Connect(function()
+    carryLoop()
 end)
 
--- Update loop
-RunService.Heartbeat:Connect(function()
-    if not isCarrying then
+-- Update player list every 2 seconds
+spawn(function()
+    while gui and gui.Parent do
         updatePlayerList()
+        wait(2)
     end
 end)
 
--- Character added handler
-LocalPlayer.CharacterAdded:Connect(function()
-    wait(1)
-    releasePlayer() -- Clean up if respawned
-end)
-
--- Player leaving handler
+-- Handle disconnections
 Players.PlayerRemoving:Connect(function(player)
-    if carriedPlayer == player then
-        releasePlayer()
+    if targetPlayer == player then
+        stopCarrying()
     end
 end)
 
-print("CARRIER SCRIPT LOADED - Click player names to carry them!")
-print("Make sure both devices are close to each other")
+-- Keyboard controls
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if input.KeyCode == Enum.KeyCode.G then
+        gui.Enabled = not gui.Enabled
+    elseif input.KeyCode == Enum.KeyCode.H and isCarrying then
+        stopCarrying()
+    end
+end)
+
+showNotification("Carrier Script Loaded! Press G to toggle", Color3.fromRGB(50, 150, 50))
+print("Piggyback Carrier Script Loaded - Press G to toggle GUI, H to release")
