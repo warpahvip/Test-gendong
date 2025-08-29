@@ -1,4 +1,4 @@
--- SCRIPT UNTUK DEVICE PENGGENDONG (CARRIER) - Enhanced Version
+-- SCRIPT UNTUK DEVICE PENGGENDONG (CARRIER) - Enhanced Fixed Version
 -- Delta Executor Android - Carry System Professional
 
 local Players = game:GetService("Players")
@@ -18,6 +18,7 @@ local carriedPlayer = nil
 local nearbyPlayers = {}
 local detectionRange = 15
 local carryTrack = nil
+local carriedTrack = nil
 local isMinimized = false
 local updateConnection = nil
 
@@ -209,7 +210,7 @@ local function createPlayerButton(player, distance)
     -- Button effects
     addButtonEffects(button, Color3.fromRGB(65, 65, 65), Color3.fromRGB(45, 45, 45))
     
-    -- Click event
+    -- Click event - FIXED
     button.MouseButton1Click:Connect(function()
         if not isCarrying then
             carryPlayerDirectly(player)
@@ -219,7 +220,7 @@ local function createPlayerButton(player, distance)
     return button
 end
 
--- Fungsi untuk langsung menggendong player
+-- Fungsi untuk langsung menggendong player - COMPLETELY FIXED
 function carryPlayerDirectly(targetPlayer)
     if isCarrying or not targetPlayer or not targetPlayer.Character then
         print("❌ Cannot carry: already carrying or invalid target")
@@ -243,7 +244,7 @@ function carryPlayerDirectly(targetPlayer)
     
     print("🎒 Starting carry process for: " .. targetPlayer.Name)
     
-    -- Set carrying state
+    -- Set carrying state FIRST
     isCarrying = true
     carriedPlayer = targetPlayer
     
@@ -251,63 +252,61 @@ function carryPlayerDirectly(targetPlayer)
     StatusLabel.Text = "🎒 Carrying: " .. (targetPlayer.DisplayName or targetPlayer.Name)
     StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
     ReleaseButton.Visible = true
+    PlayersFrame.Visible = false -- Hide player list when carrying
     
-    -- Disable target movement
-    targetHumanoid.PlatformStand = true
-    targetHumanoid.Sit = false
-    
-    -- Create attachment point on carrier
-    local carrierAttachment = Instance.new("Attachment")
-    carrierAttachment.Name = "CarrierAttachment"
-    carrierAttachment.Position = Vector3.new(0, 1, -1)
-    carrierAttachment.Parent = RootPart
-    
-    -- Create attachment point on target
-    local targetAttachment = Instance.new("Attachment")
-    targetAttachment.Name = "TargetAttachment"
-    targetAttachment.Position = Vector3.new(0, 0, 0)
-    targetAttachment.Parent = targetRootPart
-    
-    -- Create AlignPosition for smooth positioning
-    local alignPosition = Instance.new("AlignPosition")
-    alignPosition.Name = "CarryAlign"
-    alignPosition.Attachment0 = targetAttachment
-    alignPosition.Attachment1 = carrierAttachment
-    alignPosition.MaxForce = 4000
-    alignPosition.Responsiveness = 200
-    alignPosition.RigidityEnabled = true
-    alignPosition.Parent = targetRootPart
-    
-    -- Create AlignOrientation for rotation sync
-    local alignOrientation = Instance.new("AlignOrientation")
-    alignOrientation.Name = "CarryOrientAlign"
-    alignOrientation.Attachment0 = targetAttachment
-    alignOrientation.Attachment1 = carrierAttachment
-    alignOrientation.MaxTorque = 4000
-    alignOrientation.Responsiveness = 200
-    alignOrientation.RigidityEnabled = true
-    alignOrientation.Parent = targetRootPart
-    
-    -- Position target at shoulder
-    carrierAttachment.CFrame = CFrame.new(0, 1.5, -1.2) * CFrame.Angles(math.rad(-15), 0, 0)
-    
-    -- Set attributes for communication
+    -- Set attributes immediately for cross-script communication
+    Character:SetAttribute("IsCarryingPlayer", targetPlayer.Name)
     targetCharacter:SetAttribute("IsBeingCarried", true)
     targetCharacter:SetAttribute("CarrierName", LocalPlayer.Name)
-    Character:SetAttribute("IsCarryingPlayer", targetPlayer.Name)
     
-    -- Play carry animation
+    -- Disable target movement completely
+    targetHumanoid.PlatformStand = true
+    targetHumanoid.Sit = false
+    targetRootPart.Anchored = false -- Make sure it's not anchored
+    
+    -- Create WeldConstraint for solid attachment (more reliable than AlignPosition)
+    local weldConstraint = Instance.new("WeldConstraint")
+    weldConstraint.Name = "CarryWeld"
+    weldConstraint.Part0 = RootPart
+    weldConstraint.Part1 = targetRootPart
+    weldConstraint.Parent = RootPart
+    
+    -- Set carried player position relative to carrier (piggyback style)
+    local carryOffset = CFrame.new(0, 0.5, -1.5) * CFrame.Angles(0, 0, 0)
+    weldConstraint.C1 = carryOffset
+    
+    -- Play carrier animation
     if carryTrack then 
         carryTrack:Stop()
         carryTrack:Destroy()
     end
     
     local carryAnim = Instance.new("Animation")
-    carryAnim.AnimationId = "rbxassetid://507766388" -- Carry animation
+    carryAnim.AnimationId = "rbxassetid://507766388" -- Carrying animation
     carryTrack = Humanoid:LoadAnimation(carryAnim)
-    carryTrack:Play()
-    carryTrack.Looped = true
-    carryTrack.Priority = Enum.AnimationPriority.Action
+    if carryTrack then
+        carryTrack:Play()
+        carryTrack.Looped = true
+        carryTrack.Priority = Enum.AnimationPriority.Action
+    end
+    
+    -- Play carried animation on target
+    spawn(function()
+        wait(0.1) -- Small delay to ensure everything is set up
+        if targetHumanoid then
+            local carriedAnim = Instance.new("Animation")
+            carriedAnim.AnimationId = "rbxassetid://507777826" -- Being carried animation
+            carriedTrack = targetHumanoid:LoadAnimation(carriedAnim)
+            if carriedTrack then
+                carriedTrack:Play()
+                carriedTrack.Looped = true
+                carriedTrack.Priority = Enum.AnimationPriority.Action
+                
+                -- Store reference for cleanup
+                targetCharacter:SetAttribute("CarriedAnimTrack", carriedTrack)
+            end
+        end
+    end)
     
     print("✅ Successfully carrying: " .. targetPlayer.Name)
     
@@ -324,7 +323,7 @@ function carryPlayerDirectly(targetPlayer)
     end)
 end
 
--- Fungsi untuk melepas player
+-- Fungsi untuk melepas player - COMPLETELY FIXED
 function releasePlayer()
     if not isCarrying or not carriedPlayer then
         return
@@ -343,30 +342,34 @@ function releasePlayer()
             targetHumanoid.Sit = false
         end
         
-        -- Remove carry constraints
-        if targetRootPart then
-            local alignPos = targetRootPart:FindFirstChild("CarryAlign")
-            local alignOrient = targetRootPart:FindFirstChild("CarryOrientAlign")
-            local targetAttach = targetRootPart:FindFirstChild("TargetAttachment")
-            
-            if alignPos then alignPos:Destroy() end
-            if alignOrient then alignOrient:Destroy() end
-            if targetAttach then targetAttach:Destroy() end
+        -- Remove weld constraint
+        local weldConstraint = RootPart:FindFirstChild("CarryWeld")
+        if weldConstraint then
+            weldConstraint:Destroy()
         end
         
-        -- Remove attributes
+        -- Stop carried animation
+        local carriedAnimTrack = targetCharacter:GetAttribute("CarriedAnimTrack")
+        if carriedAnimTrack then
+            carriedAnimTrack:Stop()
+            carriedAnimTrack:Destroy()
+        end
+        
+        -- Remove target attributes
         targetCharacter:SetAttribute("IsBeingCarried", nil)
         targetCharacter:SetAttribute("CarrierName", nil)
+        targetCharacter:SetAttribute("CarriedAnimTrack", nil)
+        
+        -- Position carried player safely next to carrier
+        if targetRootPart then
+            targetRootPart.CFrame = RootPart.CFrame * CFrame.new(2, 0, 0)
+        end
     end
-    
-    -- Remove carrier attachment
-    local carrierAttach = RootPart:FindFirstChild("CarrierAttachment")
-    if carrierAttach then carrierAttach:Destroy() end
     
     -- Remove carrier attribute
     Character:SetAttribute("IsCarryingPlayer", nil)
     
-    -- Stop animation
+    -- Stop carrier animation
     if carryTrack then
         carryTrack:Stop()
         carryTrack:Destroy()
@@ -381,6 +384,7 @@ function releasePlayer()
     StatusLabel.Text = "📡 Ready to Carry"
     StatusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
     ReleaseButton.Visible = false
+    PlayersFrame.Visible = true -- Show player list again
     
     print("✅ Player released successfully")
 end
@@ -444,24 +448,14 @@ local function toggleMinimize()
     isMinimized = not isMinimized
     
     local targetSize = isMinimized and UDim2.new(0, 220, 0, 30) or UDim2.new(0, 220, 0, 240)
-    local targetTransparency = isMinimized and 1 or 0
     
     -- Animate frame resize
     TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
         Size = targetSize
     }):Play()
     
-    -- Hide/show content
-    TweenService:Create(ContentFrame, TweenInfo.new(0.2), {
-        BackgroundTransparency = targetTransparency
-    }):Play()
-    
-    -- Hide content elements
-    for _, child in pairs(ContentFrame:GetChildren()) do
-        if child:IsA("GuiObject") then
-            child.Visible = not isMinimized
-        end
-    end
+    -- Hide content elements instantly
+    ContentFrame.Visible = not isMinimized
     
     -- Update minimize button
     MinimizeButton.Text = isMinimized and "□" or "—"
@@ -534,6 +528,7 @@ end)
 
 -- Character respawn handler
 LocalPlayer.CharacterAdded:Connect(function(newCharacter)
+    wait(1) -- Wait for character to fully load
     Character = newCharacter
     Humanoid = Character:WaitForChild("Humanoid")
     RootPart = Character:WaitForChild("HumanoidRootPart")
@@ -550,6 +545,26 @@ end)
 -- Cleanup on character removing
 LocalPlayer.CharacterRemoving:Connect(function()
     releasePlayer()
+end)
+
+-- Auto-detect if someone wants to be carried by us
+spawn(function()
+    while true do
+        wait(0.5)
+        if not isCarrying then
+            -- Check if someone set us as their carrier
+            for _, player in pairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer and player.Character then
+                    local carrierName = player.Character:GetAttribute("CarrierName")
+                    if carrierName == LocalPlayer.Name and not player.Character:GetAttribute("IsBeingCarried") then
+                        print("🔄 Player " .. player.Name .. " requested to be carried")
+                        carryPlayerDirectly(player)
+                        break
+                    end
+                end
+            end
+        end
+    end
 end)
 
 print("✅ Enhanced Carry System (CARRIER) loaded!")
