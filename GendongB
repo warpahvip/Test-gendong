@@ -1,570 +1,337 @@
--- SCRIPT UNTUK DEVICE YANG DIGENDONG (CARRIED) - Enhanced Fixed Version
--- Delta Executor Android - Carry System Professional
+-- SCRIPT CARRIED (YANG DIGENDONG) - WORKING VERSION  
+-- Pastikan script ini berjalan di device yang akan digendong
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
-local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-local Humanoid = Character:WaitForChild("Humanoid")
-local RootPart = Character:WaitForChild("HumanoidRootPart")
 
--- Variabel Global
+-- Variables
 local isBeingCarried = false
-local carrierPlayer = nil
-local nearbyCarriers = {}
-local detectionRange = 15
-local carryTrack = nil
-local isMinimized = false
-local updateConnection = nil
+local carrier = nil
+local weld = nil
+local carriedAnimation = nil
 
--- GUI Setup (Professional)
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "CarriedSystemGUI"
-ScreenGui.Parent = PlayerGui
-ScreenGui.ResetOnSpawn = false
-
--- Main Frame
-local MainFrame = Instance.new("Frame")
-MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 220, 0, 220)
-MainFrame.Position = UDim2.new(1, -230, 0, 10)
-MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-MainFrame.BorderSizePixel = 0
-MainFrame.BackgroundTransparency = 0.05
-MainFrame.Parent = ScreenGui
-
-local MainCorner = Instance.new("UICorner")
-MainCorner.CornerRadius = UDim.new(0, 10)
-MainCorner.Parent = MainFrame
-
--- Stroke for better appearance
-local MainStroke = Instance.new("UIStroke")
-MainStroke.Color = Color3.fromRGB(60, 60, 60)
-MainStroke.Thickness = 1
-MainStroke.Parent = MainFrame
-
--- Title Bar
-local TitleBar = Instance.new("Frame")
-TitleBar.Name = "TitleBar"
-TitleBar.Size = UDim2.new(1, 0, 0, 30)
-TitleBar.Position = UDim2.new(0, 0, 0, 0)
-TitleBar.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-TitleBar.BorderSizePixel = 0
-TitleBar.Parent = MainFrame
-
-local TitleCorner = Instance.new("UICorner")
-TitleCorner.CornerRadius = UDim.new(0, 10)
-TitleCorner.Parent = TitleBar
-
--- Title Text
-local TitleText = Instance.new("TextLabel")
-TitleText.Name = "TitleText"
-TitleText.Size = UDim2.new(1, -60, 0, 30)
-TitleText.Position = UDim2.new(0, 8, 0, 0)
-TitleText.BackgroundTransparency = 1
-TitleText.Text = "🤝 CARRY REQUEST"
-TitleText.TextColor3 = Color3.fromRGB(255, 255, 255)
-TitleText.TextScaled = true
-TitleText.Font = Enum.Font.GothamBold
-TitleText.TextXAlignment = Enum.TextXAlignment.Left
-TitleText.Parent = TitleBar
-
--- Minimize Button
-local MinimizeButton = Instance.new("TextButton")
-MinimizeButton.Name = "MinimizeButton"
-MinimizeButton.Size = UDim2.new(0, 25, 0, 25)
-MinimizeButton.Position = UDim2.new(1, -55, 0, 2.5)
-MinimizeButton.BackgroundColor3 = Color3.fromRGB(255, 193, 7)
-MinimizeButton.BorderSizePixel = 0
-MinimizeButton.Text = "—"
-MinimizeButton.TextColor3 = Color3.fromRGB(0, 0, 0)
-MinimizeButton.TextScaled = true
-MinimizeButton.Font = Enum.Font.GothamBold
-MinimizeButton.Parent = TitleBar
-
-local MinCorner = Instance.new("UICorner")
-MinCorner.CornerRadius = UDim.new(0, 4)
-MinCorner.Parent = MinimizeButton
-
--- Close Button
-local CloseButton = Instance.new("TextButton")
-CloseButton.Name = "CloseButton"
-CloseButton.Size = UDim2.new(0, 25, 0, 25)
-CloseButton.Position = UDim2.new(1, -27, 0, 2.5)
-CloseButton.BackgroundColor3 = Color3.fromRGB(220, 53, 69)
-CloseButton.BorderSizePixel = 0
-CloseButton.Text = "✕"
-CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-CloseButton.TextScaled = true
-CloseButton.Font = Enum.Font.GothamBold
-CloseButton.Parent = TitleBar
-
-local CloseCorner = Instance.new("UICorner")
-CloseCorner.CornerRadius = UDim.new(0, 4)
-CloseCorner.Parent = CloseButton
-
--- Content Frame (untuk minimize)
-local ContentFrame = Instance.new("Frame")
-ContentFrame.Name = "ContentFrame"
-ContentFrame.Size = UDim2.new(1, 0, 1, -30)
-ContentFrame.Position = UDim2.new(0, 0, 0, 30)
-ContentFrame.BackgroundTransparency = 1
-ContentFrame.Parent = MainFrame
-
--- Status Label
-local StatusLabel = Instance.new("TextLabel")
-StatusLabel.Name = "StatusLabel"
-StatusLabel.Size = UDim2.new(1, -16, 0, 25)
-StatusLabel.Position = UDim2.new(0, 8, 0, 8)
-StatusLabel.BackgroundTransparency = 1
-StatusLabel.Text = "🔍 Looking for carriers..."
-StatusLabel.TextColor3 = Color3.fromRGB(100, 255, 255)
-StatusLabel.TextScaled = true
-StatusLabel.Font = Enum.Font.Gotham
-StatusLabel.TextXAlignment = Enum.TextXAlignment.Left
-StatusLabel.Parent = ContentFrame
-
--- Carriers ScrollFrame
-local CarriersFrame = Instance.new("ScrollingFrame")
-CarriersFrame.Name = "CarriersFrame"
-CarriersFrame.Size = UDim2.new(1, -16, 0, 120)
-CarriersFrame.Position = UDim2.new(0, 8, 0, 40)
-CarriersFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-CarriersFrame.BorderSizePixel = 0
-CarriersFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-CarriersFrame.ScrollBarThickness = 5
-CarriersFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 100)
-CarriersFrame.Parent = ContentFrame
-
-local CarriersCorner = Instance.new("UICorner")
-CarriersCorner.CornerRadius = UDim.new(0, 8)
-CarriersCorner.Parent = CarriersFrame
-
-local CarriersLayout = Instance.new("UIListLayout")
-CarriersLayout.SortOrder = Enum.SortOrder.Name
-CarriersLayout.Padding = UDim.new(0, 4)
-CarriersLayout.Parent = CarriersFrame
-
--- Release Button
-local ReleaseButton = Instance.new("TextButton")
-ReleaseButton.Name = "ReleaseButton"
-ReleaseButton.Size = UDim2.new(1, -16, 0, 30)
-ReleaseButton.Position = UDim2.new(0, 8, 0, 170)
-ReleaseButton.BackgroundColor3 = Color3.fromRGB(220, 53, 69)
-ReleaseButton.BorderSizePixel = 0
-ReleaseButton.Text = "🔓 GET DOWN"
-ReleaseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-ReleaseButton.TextScaled = true
-ReleaseButton.Font = Enum.Font.GothamBold
-ReleaseButton.Visible = false
-ReleaseButton.Parent = ContentFrame
-
-local ReleaseCorner = Instance.new("UICorner")
-ReleaseCorner.CornerRadius = UDim.new(0, 8)
-ReleaseCorner.Parent = ReleaseButton
-
--- Button Effects Function
-local function addButtonEffects(button, hoverColor, normalColor)
-    button.MouseEnter:Connect(function()
-        TweenService:Create(button, TweenInfo.new(0.2), {
-            BackgroundColor3 = hoverColor,
-            Size = button.Size + UDim2.new(0, 2, 0, 1)
-        }):Play()
-    end)
-    
-    button.MouseLeave:Connect(function()
-        TweenService:Create(button, TweenInfo.new(0.2), {
-            BackgroundColor3 = normalColor,
-            Size = button.Size - UDim2.new(0, 2, 0, 1)
-        }):Play()
-    end)
+-- Get character safely
+local function getCharacter()
+    return LocalPlayer.Character
 end
 
--- Add effects to control buttons
-addButtonEffects(MinimizeButton, Color3.fromRGB(255, 213, 27), Color3.fromRGB(255, 193, 7))
-addButtonEffects(CloseButton, Color3.fromRGB(240, 73, 89), Color3.fromRGB(220, 53, 69))
-addButtonEffects(ReleaseButton, Color3.fromRGB(240, 73, 89), Color3.fromRGB(220, 53, 69))
-
--- Fungsi untuk membuat tombol carrier
-local function createCarrierButton(player, distance)
-    local button = Instance.new("TextButton")
-    button.Name = player.Name
-    button.Size = UDim2.new(1, -10, 0, 30)
-    button.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-    button.BorderSizePixel = 0
-    button.Text = string.format("🎒 %s (%.0fm)", player.DisplayName or player.Name, distance)
-    button.TextColor3 = Color3.fromRGB(255, 255, 255)
-    button.TextScaled = true
-    button.Font = Enum.Font.Gotham
-    button.Parent = CarriersFrame
-    
-    local buttonCorner = Instance.new("UICorner")
-    buttonCorner.CornerRadius = UDim.new(0, 6)
-    buttonCorner.Parent = button
-    
-    -- Button effects
-    addButtonEffects(button, Color3.fromRGB(65, 65, 65), Color3.fromRGB(45, 45, 45))
-    
-    -- Click event - FIXED
-    button.MouseButton1Click:Connect(function()
-        if not isBeingCarried then
-            requestCarryFromPlayer(player)
-        end
-    end)
-    
-    return button
+local function getHumanoid()
+    local char = getCharacter()
+    return char and char:FindFirstChild("Humanoid")
 end
 
--- Fungsi untuk request carry - COMPLETELY FIXED
-function requestCarryFromPlayer(carrierPlayerObj)
-    if isBeingCarried or not carrierPlayerObj or not carrierPlayerObj.Character then
-        print("❌ Cannot be carried: already being carried or invalid carrier")
+local function getRootPart()
+    local char = getCharacter()
+    return char and char:FindFirstChild("HumanoidRootPart")
+end
+
+-- Create GUI
+local gui = Instance.new("ScreenGui")
+gui.Name = "CarriedGUI"
+gui.ResetOnSpawn = false
+gui.Parent = PlayerGui
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 250, 0, 300)
+frame.Position = UDim2.new(1, -260, 0, 10)
+frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+frame.BorderSizePixel = 0
+frame.Parent = gui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 8)
+corner.Parent = frame
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 40)
+title.Position = UDim2.new(0, 0, 0, 0)
+title.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+title.BorderSizePixel = 0
+title.Text = "CARRY REQUEST"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.TextScaled = true
+title.Font = Enum.Font.GothamBold
+title.Parent = frame
+
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 8)
+titleCorner.Parent = title
+
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Size = UDim2.new(1, -20, 0, 30)
+statusLabel.Position = UDim2.new(0, 10, 0, 50)
+statusLabel.BackgroundTransparency = 1
+statusLabel.Text = "Looking for carriers nearby..."
+statusLabel.TextColor3 = Color3.fromRGB(100, 200, 255)
+statusLabel.TextScaled = true
+statusLabel.Font = Enum.Font.Gotham
+statusLabel.Parent = frame
+
+local carriersFrame = Instance.new("ScrollingFrame")
+carriersFrame.Size = UDim2.new(1, -20, 0, 180)
+carriersFrame.Position = UDim2.new(0, 10, 0, 90)
+carriersFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+carriersFrame.BorderSizePixel = 0
+carriersFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+carriersFrame.ScrollBarThickness = 6
+carriersFrame.Parent = frame
+
+local carriersCorner = Instance.new("UICorner")
+carriersCorner.CornerRadius = UDim.new(0, 6)
+carriersCorner.Parent = carriersFrame
+
+local layout = Instance.new("UIListLayout")
+layout.SortOrder = Enum.SortOrder.Name
+layout.Padding = UDim.new(0, 5)
+layout.Parent = carriersFrame
+
+local releaseButton = Instance.new("TextButton")
+releaseButton.Size = UDim2.new(1, -20, 0, 25)
+releaseButton.Position = UDim2.new(0, 10, 0, 275)
+releaseButton.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+releaseButton.BorderSizePixel = 0
+releaseButton.Text = "GET DOWN"
+releaseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+releaseButton.TextScaled = true
+releaseButton.Font = Enum.Font.GothamBold
+releaseButton.Visible = false
+releaseButton.Parent = frame
+
+local releaseCorner = Instance.new("UICorner")
+releaseCorner.CornerRadius = UDim.new(0, 4)
+releaseCorner.Parent = releaseButton
+
+-- Request to be carried function - FIXED AND SIMPLIFIED
+local function requestCarry(targetCarrier)
+    local myChar = getCharacter()
+    local myRoot = getRootPart()
+    local myHumanoid = getHumanoid()
+    
+    if not myChar or not myRoot or not myHumanoid then
+        print("ERROR: My character not ready")
         return
     end
     
-    local carrierCharacter = carrierPlayerObj.Character
-    local carrierRootPart = carrierCharacter:FindFirstChild("HumanoidRootPart")
-    local carrierHumanoid = carrierCharacter:FindFirstChild("Humanoid")
-    
-    if not carrierRootPart or not carrierHumanoid then
-        print("❌ Carrier missing essential parts")
+    if not targetCarrier.Character then
+        print("ERROR: Carrier character not found")
         return
     end
     
-    -- Check if carrier is already carrying someone
-    if carrierCharacter:GetAttribute("IsCarryingPlayer") then
-        print("❌ Carrier is already carrying someone")
+    local carrierChar = targetCarrier.Character
+    local carrierRoot = carrierChar:FindFirstChild("HumanoidRootPart")
+    local carrierHumanoid = carrierChar:FindFirstChild("Humanoid")
+    
+    if not carrierRoot or not carrierHumanoid then
+        print("ERROR: Carrier character parts not found")
         return
     end
     
-    print("🤝 Requesting carry from: " .. carrierPlayerObj.Name)
+    if isBeingCarried then
+        print("Already being carried")
+        return
+    end
     
-    -- Set being carried state FIRST
+    print("Requesting carry from: " .. targetCarrier.Name)
+    
+    -- Set states
     isBeingCarried = true
-    carrierPlayer = carrierPlayerObj
+    carrier = targetCarrier
     
-    -- Update UI immediately
-    StatusLabel.Text = "🤝 Carried by: " .. (carrierPlayerObj.DisplayName or carrierPlayerObj.Name)
-    StatusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
-    ReleaseButton.Visible = true
-    CarriersFrame.Visible = false -- Hide carrier list when being carried
+    -- Update GUI
+    statusLabel.Text = "Being carried by: " .. targetCarrier.Name
+    statusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+    releaseButton.Visible = true
+    carriersFrame.Visible = false
     
-    -- Set attributes for cross-script communication
-    Character:SetAttribute("IsBeingCarried", true)
-    Character:SetAttribute("CarrierName", carrierPlayerObj.Name)
-    carrierCharacter:SetAttribute("IsCarryingPlayer", LocalPlayer.Name)
+    -- Disable my movement
+    myHumanoid.PlatformStand = true
     
-    -- Disable our movement completely
-    Humanoid.PlatformStand = true
-    Humanoid.Sit = false
-    RootPart.Anchored = false -- Make sure we're not anchored
+    -- Create weld for attachment
+    weld = Instance.new("WeldConstraint")
+    weld.Part0 = carrierRoot
+    weld.Part1 = myRoot
+    weld.Parent = carrierRoot
     
-    -- Create WeldConstraint for solid attachment
-    local weldConstraint = Instance.new("WeldConstraint")
-    weldConstraint.Name = "CarryWeld"
-    weldConstraint.Part0 = carrierRootPart
-    weldConstraint.Part1 = RootPart
-    weldConstraint.Parent = carrierRootPart
+    -- Position myself on carrier's back
+    myRoot.CFrame = carrierRoot.CFrame * CFrame.new(0, 1, -2)
     
-    -- Set our position relative to carrier (piggyback style)
-    local carryOffset = CFrame.new(0, 0.5, -1.5) * CFrame.Angles(0, 0, 0)
-    weldConstraint.C1 = carryOffset
-    
-    -- Play carried animation on ourselves
-    if carryTrack then 
-        carryTrack:Stop()
-        carryTrack:Destroy()
-    end
-    
-    local carriedAnim = Instance.new("Animation")
-    carriedAnim.AnimationId = "rbxassetid://507777826" -- Being carried animation
-    carryTrack = Humanoid:LoadAnimation(carriedAnim)
-    if carryTrack then
-        carryTrack:Play()
-        carryTrack.Looped = true
-        carryTrack.Priority = Enum.AnimationPriority.Action
-    end
-    
-    -- Play carrier animation on the carrier
+    -- Play animations
     spawn(function()
-        wait(0.1) -- Small delay
-        if carrierHumanoid then
-            local carrierCarryAnim = Instance.new("Animation")
-            carrierCarryAnim.AnimationId = "rbxassetid://507766388" -- Carrying animation
-            local carrierTrack = carrierHumanoid:LoadAnimation(carrierCarryAnim)
-            if carrierTrack then
-                carrierTrack:Play()
-                carrierTrack.Looped = true
-                carrierTrack.Priority = Enum.AnimationPriority.Action
-                
-                -- Store reference to stop later
-                carrierCharacter:SetAttribute("CarryAnimTrack", carrierTrack)
-            end
-        end
+        wait(0.1)
+        
+        -- My carried animation
+        local carriedAnim = Instance.new("Animation")
+        carriedAnim.AnimationId = "rbxassetid://507777826"
+        carriedAnimation = myHumanoid:LoadAnimation(carriedAnim)
+        carriedAnimation:Play()
+        carriedAnimation.Looped = true
+        
+        -- Carrier animation
+        local carryAnim = Instance.new("Animation")
+        carryAnim.AnimationId = "rbxassetid://507766388"
+        local carryAnimation = carrierHumanoid:LoadAnimation(carryAnim)
+        carryAnimation:Play()
+        carryAnimation.Looped = true
+        
+        -- Store carrier animation reference
+        carrierChar:SetAttribute("CarryAnim", carryAnimation)
     end)
     
-    print("✅ Successfully being carried by: " .. carrierPlayerObj.Name)
-    
-    -- Monitor carrier connection
-    spawn(function()
-        while isBeingCarried and carrierPlayer == carrierPlayerObj do
-            if not carrierCharacter.Parent or not carrierRootPart.Parent or not carrierPlayerObj.Parent then
-                print("⚠️ Carrier disconnected")
-                releaseFromCarrier()
-                break
-            end
-            wait(0.5)
-        end
-    end)
+    print("SUCCESS: Now being carried by " .. targetCarrier.Name)
 end
 
--- Fungsi untuk release dari carrier - COMPLETELY FIXED
-function releaseFromCarrier()
-    if not isBeingCarried then
+-- Stop being carried function - FIXED
+local function stopBeingCarried()
+    if not isBeingCarried or not carrier then
         return
     end
     
-    print("🔓 Getting down from carrier")
+    print("Getting down from: " .. carrier.Name)
     
-    local carrierCharacter = carrierPlayer and carrierPlayer.Character
+    local myHumanoid = getHumanoid()
+    local myRoot = getRootPart()
+    local carrierChar = carrier.Character
     
     -- Re-enable movement
-    Humanoid.PlatformStand = false
-    Humanoid.Sit = false
+    if myHumanoid then
+        myHumanoid.PlatformStand = false
+    end
     
-    -- Remove weld constraint from carrier
-    if carrierCharacter then
-        local carrierRoot = carrierCharacter:FindFirstChild("HumanoidRootPart")
+    -- Stop animations
+    if carriedAnimation then
+        carriedAnimation:Stop()
+        carriedAnimation:Destroy()
+        carriedAnimation = nil
+    end
+    
+    if carrierChar then
+        local carryAnim = carrierChar:GetAttribute("CarryAnim")
+        if carryAnim then
+            carryAnim:Stop()
+            carryAnim:Destroy()
+            carrierChar:SetAttribute("CarryAnim", nil)
+        end
+    end
+    
+    -- Remove weld
+    if weld then
+        weld:Destroy()
+        weld = nil
+    end
+    
+    -- Position safely
+    if myRoot and carrierChar then
+        local carrierRoot = carrierChar:FindFirstChild("HumanoidRootPart")
         if carrierRoot then
-            local weldConstraint = carrierRoot:FindFirstChild("CarryWeld")
-            if weldConstraint then
-                weldConstraint:Destroy()
-            end
-        end
-        
-        -- Stop carrier animation
-        local carrierAnimTrack = carrierCharacter:GetAttribute("CarryAnimTrack")
-        if carrierAnimTrack then
-            carrierAnimTrack:Stop()
-            carrierAnimTrack:Destroy()
-        end
-        
-        -- Remove carrier attributes
-        carrierCharacter:SetAttribute("IsCarryingPlayer", nil)
-        carrierCharacter:SetAttribute("CarryAnimTrack", nil)
-        
-        -- Position ourselves safely next to carrier
-        local carrierRootPart = carrierCharacter:FindFirstChild("HumanoidRootPart")
-        if carrierRootPart then
-            RootPart.CFrame = carrierRootPart.CFrame * CFrame.new(-2, 0, 0)
+            myRoot.CFrame = carrierRoot.CFrame * CFrame.new(-3, 0, 0)
         end
     end
     
-    -- Stop our animation
-    if carryTrack then
-        carryTrack:Stop()
-        carryTrack:Destroy()
-        carryTrack = nil
-    end
-    
-    -- Remove our attributes
-    Character:SetAttribute("IsBeingCarried", nil)
-    Character:SetAttribute("CarrierName", nil)
-    
-    -- Reset state
+    -- Reset states
     isBeingCarried = false
-    carrierPlayer = nil
+    carrier = nil
     
-    -- Update UI
-    StatusLabel.Text = "🔍 Looking for carriers..."
-    StatusLabel.TextColor3 = Color3.fromRGB(100, 255, 255)
-    ReleaseButton.Visible = false
-    CarriersFrame.Visible = true -- Show carrier list again
+    -- Update GUI
+    statusLabel.Text = "Looking for carriers nearby..."
+    statusLabel.TextColor3 = Color3.fromRGB(100, 200, 255)
+    releaseButton.Visible = false
+    carriersFrame.Visible = true
     
-    print("✅ Successfully released from carrier")
+    print("SUCCESS: No longer being carried")
 end
 
--- Update nearby carriers
-local function updateNearbyCarriers()
-    if not Character or not RootPart or isBeingCarried then
-        return
-    end
+-- Create carrier buttons
+local function updateCarrierList()
+    if isBeingCarried then return end
     
     -- Clear existing buttons
-    for _, child in pairs(CarriersFrame:GetChildren()) do
+    for _, child in pairs(carriersFrame:GetChildren()) do
         if child:IsA("TextButton") then
             child:Destroy()
         end
     end
     
-    nearbyCarriers = {}
+    local myRoot = getRootPart()
+    if not myRoot then return end
     
+    local buttonsCreated = 0
+    
+    -- Create button for each nearby player
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character then
             local playerRoot = player.Character:FindFirstChild("HumanoidRootPart")
             if playerRoot then
-                local distance = (RootPart.Position - playerRoot.Position).Magnitude
+                local distance = (myRoot.Position - playerRoot.Position).Magnitude
                 
-                -- Check if player can carry (not already carrying someone)
-                local canCarry = not player.Character:GetAttribute("IsCarryingPlayer")
-                
-                if distance <= detectionRange and canCarry then
-                    table.insert(nearbyCarriers, {player = player, distance = distance})
+                if distance <= 20 then -- Detection range
+                    local button = Instance.new("TextButton")
+                    button.Size = UDim2.new(1, -10, 0, 35)
+                    button.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+                    button.BorderSizePixel = 0
+                    button.Text = string.format("%s (%.0fm)", player.Name, distance)
+                    button.TextColor3 = Color3.fromRGB(255, 255, 255)
+                    button.TextScaled = true
+                    button.Font = Enum.Font.Gotham
+                    button.Parent = carriersFrame
+                    
+                    local buttonCorner = Instance.new("UICorner")
+                    buttonCorner.CornerRadius = UDim.new(0, 4)
+                    buttonCorner.Parent = button
+                    
+                    -- CRITICAL FIX: Proper click event
+                    local targetCarrierRef = player -- Store reference
+                    button.MouseButton1Click:Connect(function()
+                        print("Button clicked for carrier: " .. targetCarrierRef.Name)
+                        requestCarry(targetCarrierRef)
+                    end)
+                    
+                    -- Hover effects
+                    button.MouseEnter:Connect(function()
+                        button.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+                    end)
+                    
+                    button.MouseLeave:Connect(function()
+                        button.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+                    end)
+                    
+                    buttonsCreated = buttonsCreated + 1
                 end
             end
         end
     end
     
-    -- Sort by distance
-    table.sort(nearbyCarriers, function(a, b)
-        return a.distance < b.distance
-    end)
-    
-    -- Create buttons
-    for _, data in pairs(nearbyCarriers) do
-        createCarrierButton(data.player, data.distance)
-    end
-    
     -- Update canvas size
-    CarriersFrame.CanvasSize = UDim2.new(0, 0, 0, #nearbyCarriers * 34)
-    
-    -- Update status if no carriers nearby
-    if #nearbyCarriers == 0 then
-        StatusLabel.Text = "❌ No carriers nearby"
-        StatusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
-    elseif not isBeingCarried then
-        StatusLabel.Text = "🔍 Looking for carriers..."
-        StatusLabel.TextColor3 = Color3.fromRGB(100, 255, 255)
-    end
+    carriersFrame.CanvasSize = UDim2.new(0, 0, 0, buttonsCreated * 40)
 end
-
--- Minimize functionality
-local function toggleMinimize()
-    isMinimized = not isMinimized
-    
-    local targetSize = isMinimized and UDim2.new(0, 220, 0, 30) or UDim2.new(0, 220, 0, 220)
-    
-    -- Animate frame resize
-    TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
-        Size = targetSize
-    }):Play()
-    
-    -- Hide content elements instantly
-    ContentFrame.Visible = not isMinimized
-    
-    -- Update minimize button
-    MinimizeButton.Text = isMinimized and "□" or "—"
-end
-
--- Control button events
-MinimizeButton.MouseButton1Click:Connect(toggleMinimize)
-
-CloseButton.MouseButton1Click:Connect(function()
-    -- Stop any ongoing processes
-    if updateConnection then updateConnection:Disconnect() end
-    releaseFromCarrier()
-    
-    -- Fade out and destroy
-    TweenService:Create(ScreenGui, TweenInfo.new(0.3), {
-        BackgroundTransparency = 1
-    }):Play()
-    
-    for _, obj in pairs(ScreenGui:GetDescendants()) do
-        if obj:IsA("GuiObject") then
-            TweenService:Create(obj, TweenInfo.new(0.3), {
-                BackgroundTransparency = 1,
-                TextTransparency = 1
-            }):Play()
-        end
-    end
-    
-    wait(0.3)
-    ScreenGui:Destroy()
-    print("🗂️ Carried System closed")
-end)
 
 -- Release button event
-ReleaseButton.MouseButton1Click:Connect(function()
-    releaseFromCarrier()
+releaseButton.MouseButton1Click:Connect(function()
+    stopBeingCarried()
 end)
 
--- Make frame draggable
-local dragging = false
-local dragStart = nil
-local startPos = nil
-
-TitleBar.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = true
-        dragStart = input.Position
-        startPos = MainFrame.Position
+-- Update loop
+RunService.Heartbeat:Connect(function()
+    if not isBeingCarried then
+        updateCarrierList()
     end
 end)
 
-TitleBar.InputChanged:Connect(function(input)
-    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-        local delta = input.Position - dragStart
-        MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-    end
-end)
-
-TitleBar.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = false
-    end
-end)
-
--- Main update loop
-updateConnection = RunService.Heartbeat:Connect(function()
-    if not isMinimized and not isBeingCarried then
-        updateNearbyCarriers()
-    end
-end)
-
--- Character respawn handler
-LocalPlayer.CharacterAdded:Connect(function(newCharacter)
-    wait(1) -- Wait for character to fully load
-    Character = newCharacter
-    Humanoid = Character:WaitForChild("Humanoid")
-    RootPart = Character:WaitForChild("HumanoidRootPart")
-    releaseFromCarrier()
+-- Character added handler
+LocalPlayer.CharacterAdded:Connect(function()
+    wait(1)
+    stopBeingCarried() -- Clean up if respawned
 end)
 
 -- Player leaving handler
 Players.PlayerRemoving:Connect(function(player)
-    if carrierPlayer == player then
-        releaseFromCarrier()
+    if carrier == player then
+        stopBeingCarried()
     end
 end)
 
--- Cleanup on character removing
-LocalPlayer.CharacterRemoving:Connect(function()
-    releaseFromCarrier()
-end)
-
--- Auto-detect if being carried by someone else - FIXED
-spawn(function()
-    while true do
-        wait(0.5)
-        if not isBeingCarried then
-            -- Check if someone is trying to carry us
-            local carrierName = Character:GetAttribute("CarrierName")
-            if carrierName and not Character:GetAttribute("IsBeingCarried") then
-                local carrier = Players:FindFirstChild(carrierName)
-                if carrier and carrier.Character then
-                    print("🔄 Detected carry request from: " .. carrier.Name)
-                    -- Someone wants to carry us, accept it
-                    requestCarryFromPlayer(carrier)
-                end
-            end
-        end
-    end
-end)
-
-print("✅ Enhanced Carry System (CARRIED) loaded!")
-print("💡 Professional UI with minimize/close controls")
-print("🤝 Click carrier names to request being carried")
+print("CARRIED SCRIPT LOADED - Click carrier names to request being carried!")
+print("Make sure both devices are close to each other")
