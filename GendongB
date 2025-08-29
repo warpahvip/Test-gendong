@@ -1,416 +1,385 @@
-
--- SCRIPT 2 - UNTUK HP KEDUA (RECEIVER) 
--- Copy script ini dan execute di HP kedua
--- ==========================================
--- ==========================================
+-- SCRIPT UNTUK DEVICE YANG DIGENDONG (CARRIED)
+-- Delta Executor Android - Carry System
 
 local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local Humanoid = Character:WaitForChild("Humanoid")
+local RootPart = Character:WaitForChild("HumanoidRootPart")
 
-local isAttached = false
+-- Variabel Global
+local isBeingCarried = false
 local carrierPlayer = nil
-local monitorConnection = nil
+local nearbyCarriers = {}
+local detectionRange = 15
+local carryCheckConnection = nil
 
--- Create GUI for HP 2
-local function createReceiverGUI()
-    local gui = Instance.new("ScreenGui")
-    gui.Name = "ReceiverGUI"
-    gui.Parent = PlayerGui
+-- GUI Setup
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "CarriedSystemGUI"
+ScreenGui.Parent = PlayerGui
+
+-- Main Frame
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 280, 0, 300)
+MainFrame.Position = UDim2.new(1, -290, 0.5, -150)
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+MainFrame.BorderSizePixel = 0
+MainFrame.Parent = ScreenGui
+
+-- Corner untuk rounded frame
+local Corner = Instance.new("UICorner")
+Corner.CornerRadius = UDim.new(0, 12)
+Corner.Parent = MainFrame
+
+-- Title
+local Title = Instance.new("TextLabel")
+Title.Name = "Title"
+Title.Size = UDim2.new(1, 0, 0, 40)
+Title.Position = UDim2.new(0, 0, 0, 0)
+Title.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+Title.BorderSizePixel = 0
+Title.Text = "🤝 REQUEST CARRY"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextScaled = true
+Title.Font = Enum.Font.GothamBold
+Title.Parent = MainFrame
+
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 12)
+TitleCorner.Parent = Title
+
+-- Status Label
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Name = "StatusLabel"
+StatusLabel.Size = UDim2.new(1, -20, 0, 30)
+StatusLabel.Position = UDim2.new(0, 10, 0, 50)
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.Text = "🔍 Status: Mencari Carrier"
+StatusLabel.TextColor3 = Color3.fromRGB(100, 255, 255)
+StatusLabel.TextScaled = true
+StatusLabel.Font = Enum.Font.Gotham
+StatusLabel.TextXAlignment = Enum.TextXAlignment.Left
+StatusLabel.Parent = MainFrame
+
+-- Carriers ScrollFrame
+local CarriersFrame = Instance.new("ScrollingFrame")
+CarriersFrame.Name = "CarriersFrame"
+CarriersFrame.Size = UDim2.new(1, -20, 0, 150)
+CarriersFrame.Position = UDim2.new(0, 10, 0, 90)
+CarriersFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+CarriersFrame.BorderSizePixel = 0
+CarriersFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+CarriersFrame.ScrollBarThickness = 6
+CarriersFrame.Parent = MainFrame
+
+local CarriersCorner = Instance.new("UICorner")
+CarriersCorner.CornerRadius = UDim.new(0, 8)
+CarriersCorner.Parent = CarriersFrame
+
+local CarriersLayout = Instance.new("UIListLayout")
+CarriersLayout.SortOrder = Enum.SortOrder.Name
+CarriersLayout.Padding = UDim.new(0, 5)
+CarriersLayout.Parent = CarriersFrame
+
+-- Release Button
+local ReleaseButton = Instance.new("TextButton")
+ReleaseButton.Name = "ReleaseButton"
+ReleaseButton.Size = UDim2.new(1, -20, 0, 40)
+ReleaseButton.Position = UDim2.new(0, 10, 0, 250)
+ReleaseButton.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
+ReleaseButton.BorderSizePixel = 0
+ReleaseButton.Text = "🔓 TURUN DARI CARRIER"
+ReleaseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+ReleaseButton.TextScaled = true
+ReleaseButton.Font = Enum.Font.GothamBold
+ReleaseButton.Visible = false
+ReleaseButton.Parent = MainFrame
+
+local ReleaseCorner = Instance.new("UICorner")
+ReleaseCorner.CornerRadius = UDim.new(0, 8)
+ReleaseCorner.Parent = ReleaseButton
+
+-- Fungsi untuk membuat tombol carrier
+local function createCarrierButton(player, distance)
+    local button = Instance.new("TextButton")
+    button.Name = player.Name
+    button.Size = UDim2.new(1, -10, 0, 35)
+    button.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+    button.BorderSizePixel = 0
+    button.Text = string.format("🎒 %s (%.1fm)", player.DisplayName or player.Name, distance)
+    button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    button.TextScaled = true
+    button.Font = Enum.Font.Gotham
+    button.Parent = CarriersFrame
     
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 180, 0, 70)
-    frame.Position = UDim2.new(1, -190, 0, 10)
-    frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    frame.BorderSizePixel = 0
-    frame.Parent = gui
+    local buttonCorner = Instance.new("UICorner")
+    buttonCorner.CornerRadius = UDim.new(0, 6)
+    buttonCorner.Parent = button
     
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 8)
-    corner.Parent = frame
+    -- Hover effect
+    button.MouseEnter:Connect(function()
+        TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(60, 60, 60)}):Play()
+    end)
     
-    local stroke = Instance.new("UIStroke")
-    stroke.Color = Color3.fromRGB(255, 100, 150)
-    stroke.Thickness = 2
-    stroke.Parent = frame
+    button.MouseLeave:Connect(function()
+        TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(45, 45, 45)}):Play()
+    end)
     
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, 0, 0, 25)
-    title.BackgroundColor3 = Color3.fromRGB(255, 100, 150)
-    title.Text = "HP 2 - RECEIVER"
-    title.TextColor3 = Color3.white
-    title.TextSize = 12
-    title.Font = Enum.Font.GothamBold
-    title.TextXAlignment = Enum.TextXAlignment.Center
-    title.Parent = frame
+    -- Click event
+    button.MouseButton1Click:Connect(function()
+        if not isBeingCarried then
+            requestCarry(player)
+        end
+    end)
     
-    local titleCorner = Instance.new("UICorner")
-    titleCorner.CornerRadius = UDim.new(0, 8)
-    titleCorner.Parent = title
-    
-    local status = Instance.new("TextLabel")
-    status.Name = "Status"
-    status.Size = UDim2.new(1, -10, 0, 40)
-    status.Position = UDim2.new(0, 5, 0, 30)
-    status.BackgroundTransparency = 1
-    status.Text = "Siap digendong..."
-    status.TextColor3 = Color3.fromRGB(200, 200, 200)
-    status.TextSize = 11
-    status.Font = Enum.Font.Gotham
-    status.TextXAlignment = Enum.TextXAlignment.Center
-    status.Parent = frame
-    
-    return frame, status
+    return button
 end
 
--- Attach to carrier
-local function attachToCarrier(carrier)
-    if isAttached then return end
+-- Fungsi untuk request carry
+function requestCarry(carrierPlayer)
+    if isBeingCarried or not carrierPlayer or not carrierPlayer.Character then
+        return
+    end
     
-    isAttached = true
+    local carrierCharacter = carrierPlayer.Character
+    local carrierRootPart = carrierCharacter:FindFirstChild("HumanoidRootPart")
+    
+    if not carrierRootPart then
+        return
+    end
+    
+    -- Set attributes untuk komunikasi
+    Character:SetAttribute("RequestCarry", carrierPlayer.Name)
+    Character:SetAttribute("CarryRequestTime", tick())
+    
+    -- Mulai proses carry
+    attachToCarrier(carrierPlayer)
+end
+
+-- Fungsi untuk attach ke carrier
+function attachToCarrier(carrier)
+    if not carrier or not carrier.Character then
+        return
+    end
+    
+    local carrierCharacter = carrier.Character
+    local carrierRootPart = carrierCharacter:FindFirstChild("HumanoidRootPart")
+    
+    if not carrierRootPart then
+        return
+    end
+    
+    isBeingCarried = true
     carrierPlayer = carrier
     
-    local myChar = LocalPlayer.Character
-    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
-    local myHumanoid = myChar:FindFirstChild("Humanoid")
+    -- Update status
+    StatusLabel.Text = "🤝 Digendong oleh: " .. (carrier.DisplayName or carrier.Name)
+    StatusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+    ReleaseButton.Visible = true
     
-    if myRoot and myHumanoid then
-        -- Disable movement
-        myHumanoid.PlatformStand = true
-        myHumanoid.WalkSpeed = 0
-        myHumanoid.JumpPower = 0
-        
-        -- Create BodyPosition for smooth following
-        local bodyPos = Instance.new("BodyPosition")
-        bodyPos.MaxForce = Vector3.new(4000, 4000, 4000)
-        bodyPos.D = 2500
-        bodyPos.P = 12000
-        bodyPos.Parent = myRoot
-        
-        -- Update position loop
-        spawn(function()
-            while isAttached and carrierPlayer and carrierPlayer.Character do
-                local carrierRoot = carrierPlayer.Character:FindFirstChild("HumanoidRootPart")
-                if carrierRoot and bodyPos then
-                    local carrierCFrame = carrierRoot.CFrame
-                    local shoulderPos = carrierCFrame.Position + carrierCFrame.UpVector * 1.7 + carrierCFrame.RightVector * 1.3
-                    bodyPos.Position = shoulderPos
-                else
-                    break
-                end
-                wait(0.1)
-            end
-        end)
+    -- Disable local controls
+    Humanoid.PlatformStand = true
+    
+    -- Create attachment points
+    local carrierAttachment = carrierRootPart:FindFirstChild("CarryAttachment")
+    if not carrierAttachment then
+        carrierAttachment = Instance.new("Attachment")
+        carrierAttachment.Name = "CarryAttachment"
+        carrierAttachment.Parent = carrierRootPart
+        carrierAttachment.Position = Vector3.new(0, 1, -1.5)
     end
     
-    print("Attached to " .. carrier.Name)
-end
-
--- Detach from carrier  
-local function detachFromCarrier()
-    if not isAttached then return end
+    local localAttachment = Instance.new("Attachment")
+    localAttachment.Name = "CarryAttachment"
+    localAttachment.Parent = RootPart
     
-    isAttached = false
+    -- Create position constraint
+    local alignPosition = Instance.new("AlignPosition")
+    alignPosition.Attachment0 = localAttachment
+    alignPosition.Attachment1 = carrierAttachment
+    alignPosition.MaxForce = 4000
+    alignPosition.MaxVelocity = math.huge
+    alignPosition.Responsiveness = 10
+    alignPosition.Parent = RootPart
     
-    local myChar = LocalPlayer.Character
-    if myChar then
-        local myRoot = myChar:FindFirstChild("HumanoidRootPart")
-        local myHumanoid = myChar:FindFirstChild("Humanoid")
-        
-        -- Remove BodyPosition
-        if myRoot then
-            for _, obj in pairs(myRoot:GetChildren()) do
-                if obj:IsA("BodyPosition") then
-                    obj:Destroy()
-                end
-            end
+    -- Create orientation constraint
+    local alignOrientation = Instance.new("AlignOrientation")
+    alignOrientation.Attachment0 = localAttachment
+    alignOrientation.Attachment1 = carrierAttachment
+    alignOrientation.MaxTorque = 4000
+    alignOrientation.MaxAngularVelocity = math.huge
+    alignOrientation.Responsiveness = 10
+    alignOrientation.Parent = RootPart
+    
+    -- Play carried animation
+    local carriedAnim = Instance.new("Animation")
+    carriedAnim.AnimationId = "rbxassetid://507777826" -- Sitting/carried animation
+    local carriedTrack = Humanoid:LoadAnimation(carriedAnim)
+    carriedTrack:Play()
+    
+    -- Set attributes
+    Character:SetAttribute("IsBeingCarried", true)
+    Character:SetAttribute("CarrierName", carrier.Name)
+    
+    -- Monitor carrier
+    carryCheckConnection = RunService.Heartbeat:Connect(function()
+        if not carrierCharacter.Parent or not carrierRootPart.Parent or not carrierRootPart:FindFirstChild("CarryAttachment") then
+            releaseFromCarrier()
+            return
         end
         
-        -- Restore movement
-        if myHumanoid then
-            myHumanoid.PlatformStand = false
-            myHumanoid.WalkSpeed = 16
-            myHumanoid.JumpPower = 50
-        end
-    end
-    
-    carrierPlayer = nil
-    print("Detached from carrier")
-end
-
--- Monitor signals
-local function startMonitoring()
-    monitorConnection = RunService.Heartbeat:Connect(function()
-        -- Check for carry signals
-        for _, obj in pairs(workspace:GetChildren()) do
-            if obj.Name == "CarrySignal" and obj:IsA("StringValue") then
-                local data = obj.Value:split(":")
-                if data[1] == "START" then
-                    local carrierId = tonumber(data[2])
-                    local carrier = Players:GetPlayerByUserId(carrierId)
-                    if carrier and carrier ~= LocalPlayer then
-                        attachToCarrier(carrier)
-                        obj:Destroy()
-                    end
-                end
-            end
-            
-            -- Check for stop signals
-            if obj.Name == "StopSignal" and obj:IsA("StringValue") then
-                local data = obj.Value:split(":")
-                if data[1] == "STOP" then
-                    detachFromCarrier()
-                    obj:Destroy()
-                end
-            end
+        -- Check if we're still being carried by checking distance
+        local distance = (RootPart.Position - carrierRootPart.Position).Magnitude
+        if distance > 10 then -- If too far, something went wrong
+            releaseFromCarrier()
         end
     end)
 end
 
--- Auto-attach to first available player
-local function autoAttach()
-    wait(2) -- Wait for other scripts to load
+-- Fungsi untuk release dari carrier
+function releaseFromCarrier()
+    if not isBeingCarried then
+        return
+    end
     
-    for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character then
-            attachToCarrier(player)
-            break
+    -- Re-enable controls
+    Humanoid.PlatformStand = false
+    
+    -- Clean up attachments and constraints
+    for _, obj in pairs(RootPart:GetChildren()) do
+        if obj.Name == "CarryAttachment" or obj:IsA("AlignPosition") or obj:IsA("AlignOrientation") then
+            obj:Destroy()
+        end
+    end
+    
+    -- Remove attributes
+    Character:SetAttribute("IsBeingCarried", nil)
+    Character:SetAttribute("CarrierName", nil)
+    Character:SetAttribute("RequestCarry", nil)
+    
+    -- Disconnect monitor
+    if carryCheckConnection then
+        carryCheckConnection:Disconnect()
+        carryCheckConnection = nil
+    end
+    
+    -- Update UI
+    isBeingCarried = false
+    carrierPlayer = nil
+    StatusLabel.Text = "🔍 Status: Mencari Carrier"
+    StatusLabel.TextColor3 = Color3.fromRGB(100, 255, 255)
+    ReleaseButton.Visible = false
+    
+    -- Stop animation
+    for _, track in pairs(Humanoid:GetPlayingAnimationTracks()) do
+        if track.Animation.AnimationId == "rbxassetid://507777826" then
+            track:Stop()
         end
     end
 end
 
--- Setup
-local mainFrame, statusLabel = createReceiverGUI()
-
-UserInputService.InputBegan:Connect(function(input)
-    if input.KeyCode == Enum.KeyCode.T then
-        if isAttached then
-            detachFromCarrier()
-            statusLabel.Text = "Siap digendong..."
-        else
-            autoAttach()
-        end
-    elseif input.KeyCode == Enum.KeyCode.R then
-        mainFrame.Visible = not mainFrame.Visible
-    end
+-- Release button event
+ReleaseButton.MouseButton1Click:Connect(function()
+    releaseFromCarrier()
 end)
 
-startMonitoring()
-autoAttach() -- Auto-attach saat script dimulai
-
-print("HP 2 RECEIVER READY - T to toggle attach/detach, R to toggle GUI")
-
--- ==========================================
--- COPY KEDUA SCRIPT DI BAWAH INI SECARA TERPISAH
--- ==========================================
-
-
--- ==========================================
--- SCRIPT 2 - UNTUK HP KEDUA (RECEIVER)  
--- Copy script ini dan execute di HP kedua
--- ==========================================
-
-local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
-
-local LocalPlayer = Players.LocalPlayer
-local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
-
-local isAttached = false
-local carrierPlayer = nil
-local monitorConnection = nil
-
--- Create GUI for receiver
-local function createReceiverGUI()
-    local gui = Instance.new("ScreenGui")
-    gui.Name = "ReceiverGUI"
-    gui.Parent = PlayerGui
+-- Fungsi untuk update nearby carriers
+local function updateNearbyCarriers()
+    if not Character or not RootPart or isBeingCarried then
+        return
+    end
     
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 180, 0, 70)
-    frame.Position = UDim2.new(1, -190, 0, 10)
-    frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    frame.BorderSizePixel = 0
-    frame.Parent = gui
+    -- Clear existing buttons
+    for _, child in pairs(CarriersFrame:GetChildren()) do
+        if child:IsA("TextButton") then
+            child:Destroy()
+        end
+    end
     
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 8)
-    corner.Parent = frame
+    nearbyCarriers = {}
     
-    local stroke = Instance.new("UIStroke")
-    stroke.Color = Color3.fromRGB(255, 100, 150)
-    stroke.Thickness = 2
-    stroke.Parent = frame
-    
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, 0, 0, 25)
-    title.BackgroundColor3 = Color3.fromRGB(255, 100, 150)
-    title.Text = "HP 2 - RECEIVER"
-    title.TextColor3 = Color3.white
-    title.TextSize = 12
-    title.Font = Enum.Font.GothamBold
-    title.TextXAlignment = Enum.TextXAlignment.Center
-    title.Parent = frame
-    
-    local titleCorner = Instance.new("UICorner")
-    titleCorner.CornerRadius = UDim.new(0, 8)
-    titleCorner.Parent = title
-    
-    local status = Instance.new("TextLabel")
-    status.Name = "Status"
-    status.Size = UDim2.new(1, -10, 0, 40)
-    status.Position = UDim2.new(0, 5, 0, 30)
-    status.BackgroundTransparency = 1
-    status.Text = "Siap digendong..."
-    status.TextColor3 = Color3.fromRGB(200, 200, 200)
-    status.TextSize = 11
-    status.Font = Enum.Font.Gotham
-    status.TextXAlignment = Enum.TextXAlignment.Center
-    status.Parent = frame
-    
-    return frame, status
-end
-
--- Attach to carrier
-local function attachToCarrier(carrier)
-    if isAttached then return end
-    
-    isAttached = true
-    carrierPlayer = carrier
-    
-    local myChar = LocalPlayer.Character
-    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
-    local myHumanoid = myChar:FindFirstChild("Humanoid")
-    
-    if myRoot and myHumanoid then
-        -- Disable movement
-        myHumanoid.PlatformStand = true
-        myHumanoid.WalkSpeed = 0
-        myHumanoid.JumpPower = 0
-        
-        -- Create BodyPosition
-        local bodyPos = Instance.new("BodyPosition")
-        bodyPos.MaxForce = Vector3.new(4000, 4000, 4000)
-        bodyPos.D = 2500
-        bodyPos.P = 12000
-        bodyPos.Parent = myRoot
-        
-        -- Update position
-        spawn(function()
-            while isAttached and carrierPlayer and carrierPlayer.Character do
-                local carrierRoot = carrierPlayer.Character:FindFirstChild("HumanoidRootPart")
-                if carrierRoot and bodyPos and bodyPos.Parent then
-                    local carrierCFrame = carrierRoot.CFrame
-                    local shoulderPos = carrierCFrame.Position + carrierCFrame.UpVector * 1.7 + carrierCFrame.RightVector * 1.3
-                    bodyPos.Position = shoulderPos
-                else
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local distance = (RootPart.Position - player.Character.HumanoidRootPart.Position).Magnitude
+            
+            -- Check if player can carry (not already carrying someone)
+            local canCarry = true
+            for _, otherPlayer in pairs(Players:GetPlayers()) do
+                if otherPlayer.Character and otherPlayer.Character:GetAttribute("CarrierName") == player.Name then
+                    canCarry = false
                     break
-                end
-                wait(0.05)
-            end
-        end)
-    end
-    
-    print("Attached to " .. carrier.Name)
-end
-
--- Detach
-local function detachFromCarrier()
-    if not isAttached then return end
-    
-    isAttached = false
-    
-    local myChar = LocalPlayer.Character
-    if myChar then
-        local myRoot = myChar:FindFirstChild("HumanoidRootPart")
-        local myHumanoid = myChar:FindFirstChild("Humanoid")
-        
-        -- Remove BodyPosition
-        if myRoot then
-            for _, obj in pairs(myRoot:GetChildren()) do
-                if obj:IsA("BodyPosition") then
-                    obj:Destroy()
-                end
-            end
-        end
-        
-        -- Restore movement
-        if myHumanoid then
-            myHumanoid.PlatformStand = false
-            myHumanoid.WalkSpeed = 16
-            myHumanoid.JumpPower = 50
-        end
-    end
-    
-    carrierPlayer = nil
-    print("Detached")
-end
-
--- Monitor signals
-local function startMonitoring()
-    monitorConnection = RunService.Heartbeat:Connect(function()
-        for _, obj in pairs(workspace:GetChildren()) do
-            if obj.Name == "CarrySignal" and obj:IsA("StringValue") then
-                local data = obj.Value:split(":")
-                if data[1] == "START" then
-                    local carrierId = tonumber(data[2])
-                    local carrier = Players:GetPlayerByUserId(carrierId)
-                    if carrier and carrier ~= LocalPlayer then
-                        attachToCarrier(carrier)
-                        obj:Destroy()
-                    end
                 end
             end
             
-            if obj.Name == "StopSignal" and obj:IsA("StringValue") then
-                detachFromCarrier()
-                obj:Destroy()
+            if distance <= detectionRange and canCarry then
+                table.insert(nearbyCarriers, {player = player, distance = distance})
             end
         end
+    end
+    
+    -- Sort by distance
+    table.sort(nearbyCarriers, function(a, b)
+        return a.distance < b.distance
     end)
+    
+    -- Create buttons
+    for _, data in pairs(nearbyCarriers) do
+        createCarrierButton(data.player, data.distance)
+    end
+    
+    -- Update canvas size
+    CarriersFrame.CanvasSize = UDim2.new(0, 0, 0, #nearbyCarriers * 40)
 end
 
--- Auto-attach
-local function autoAttach()
-    wait(1)
-    for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character then
-            attachToCarrier(player)
-            break
+-- Check if being carried by monitoring attributes
+local function checkCarryStatus()
+    local isCarried = Character:GetAttribute("IsBeingCarried")
+    local carrierName = Character:GetAttribute("CarrierName")
+    
+    if isCarried and carrierName and not isBeingCarried then
+        local carrier = Players:FindFirstChild(carrierName)
+        if carrier then
+            attachToCarrier(carrier)
         end
+    elseif not isCarried and isBeingCarried then
+        releaseFromCarrier()
     end
 end
 
--- Setup HP 2
-local mainFrame, statusLabel = createReceiverGUI()
-
-UserInputService.InputBegan:Connect(function(input)
-    if input.KeyCode == Enum.KeyCode.T then
-        if isAttached then
-            detachFromCarrier()
-            statusLabel.Text = "Siap digendong..."
-            statusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-        else
-            autoAttach()
-        end
-    elseif input.KeyCode == Enum.KeyCode.R then
-        mainFrame.Visible = not mainFrame.Visible
+-- Update loops
+RunService.Heartbeat:Connect(function()
+    checkCarryStatus()
+    if not isBeingCarried then
+        updateNearbyCarriers()
     end
 end)
 
-startMonitoring()
+-- Cleanup ketika character respawn
+LocalPlayer.CharacterAdded:Connect(function(newCharacter)
+    Character = newCharacter
+    Humanoid = Character:WaitForChild("Humanoid")
+    RootPart = Character:WaitForChild("HumanoidRootPart")
+    
+    -- Reset state
+    releaseFromCarrier()
+end)
 
--- Auto-attach when script runs
-spawn(function()
-    autoAttach()
-    if isAttached and statusLabel then
-        statusLabel.Text = "Tergendong!"
-        statusLabel.TextColor3 = Color3.fromRGB(0, 255, 100)
+-- Cleanup ketika carrier leave
+game.Players.PlayerRemoving:Connect(function(player)
+    if carrierPlayer == player then
+        releaseFromCarrier()
     end
 end)
 
-print("HP 2 RECEIVER READY - Will auto-attach to HP 1")
+print("✅ Carry System (Carried) berhasil dimuat!")
+print("📋 Cara penggunaan:")
+print("   • Player yang bisa menggendong akan muncul di GUI")
+print("   • Klik nama player untuk request digendong")
+print("   • Klik 'TURUN DARI CARRIER' untuk turun")
