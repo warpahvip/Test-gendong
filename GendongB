@@ -1,0 +1,634 @@
+-- ==========================================
+-- DEVICE B - CARRY RECEIVER SCRIPT (FIXED)
+-- Script untuk menerima request carry/gendong
+-- Executor: Delta - Works in Roblox Mountains/Terrain Maps
+-- ==========================================
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local SoundService = game:GetService("SoundService")
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+-- ==========================================
+-- SETUP REMOTE EVENTS
+-- ==========================================
+local function createRemoteEvents()
+    local folder = ReplicatedStorage:FindFirstChild("CarrySystem")
+    if not folder then
+        folder = Instance.new("Folder")
+        folder.Name = "CarrySystem"
+        folder.Parent = ReplicatedStorage
+    end
+    
+    local carryRequest = folder:FindFirstChild("CarryRequest")
+    if not carryRequest then
+        carryRequest = Instance.new("RemoteEvent")
+        carryRequest.Name = "CarryRequest"
+        carryRequest.Parent = folder
+    end
+    
+    local carryResponse = folder:FindFirstChild("CarryResponse")
+    if not carryResponse then
+        carryResponse = Instance.new("RemoteEvent")
+        carryResponse.Name = "CarryResponse"
+        carryResponse.Parent = folder
+    end
+    
+    local carryUpdate = folder:FindFirstChild("CarryUpdate")
+    if not carryUpdate then
+        carryUpdate = Instance.new("RemoteEvent")
+        carryUpdate.Name = "CarryUpdate"
+        carryUpdate.Parent = folder
+    end
+    
+    return carryRequest, carryResponse, carryUpdate
+end
+
+local carryRequestEvent, carryResponseEvent, carryUpdateEvent = createRemoteEvents()
+
+-- ==========================================
+-- VARIABEL GLOBAL
+-- ==========================================
+local CarryGUI = nil
+local isBeingCarried = false
+local carrierPlayer = nil
+local currentRequest = nil
+local requestCheckConnection = nil
+
+-- ==========================================
+-- FUNGSI ANIMASI & NOTIFIKASI
+-- ==========================================
+local function animateButton(button, scale)
+    local originalSize = button.Size
+    local tween = TweenService:Create(
+        button,
+        TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        {Size = originalSize * scale}
+    )
+    tween:Play()
+    
+    tween.Completed:Connect(function()
+        local reverseTween = TweenService:Create(
+            button,
+            TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+            {Size = originalSize}
+        )
+        reverseTween:Play()
+    end)
+end
+
+local function createNotification(text, color)
+    local notif = Instance.new("Frame")
+    notif.Size = UDim2.new(0, 280, 0, 70)
+    notif.Position = UDim2.new(1, 50, 0.5, -35)
+    notif.BackgroundColor3 = color
+    notif.BorderSizePixel = 0
+    notif.Parent = PlayerGui
+    notif.ZIndex = 10
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 10)
+    corner.Parent = notif
+    
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(255, 255, 255)
+    stroke.Thickness = 2
+    stroke.Transparency = 0.8
+    stroke.Parent = notif
+    
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -20, 1, 0)
+    label.Position = UDim2.new(0, 10, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.TextScaled = true
+    label.Font = Enum.Font.GothamBold
+    label.TextWrapped = true
+    label.Parent = notif
+    
+    -- Slide in animation
+    local slideIn = TweenService:Create(notif, TweenInfo.new(0.4, Enum.EasingStyle.Back), {Position = UDim2.new(1, -300, 0.5, -35)})
+    slideIn:Play()
+    
+    -- Play notification sound
+    pcall(function()
+        local sound = Instance.new("Sound")
+        sound.SoundId = "rbxasset://sounds/electronicpingshort.wav"
+        sound.Volume = 0.5
+        sound.Parent = notif
+        sound:Play()
+        sound.Ended:Connect(function() sound:Destroy() end)
+    end)
+    
+    game:GetService("Debris"):AddItem(notif, 4)
+end
+
+local function createBigNotification(title, message, color, showButtons, onAccept, onDecline)
+    local bigNotif = Instance.new("Frame")
+    bigNotif.Name = "BigNotification"
+    bigNotif.Size = UDim2.new(0, 400, 0, 200)
+    bigNotif.Position = UDim2.new(0.5, -200, 0.5, -100)
+    bigNotif.BackgroundColor3 = Color3.fromRGB(20, 25, 35)
+    bigNotif.BorderSizePixel = 0
+    bigNotif.ZIndex = 15
+    bigNotif.Parent = PlayerGui
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 15)
+    corner.Parent = bigNotif
+    
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = color
+    stroke.Thickness = 3
+    stroke.Parent = bigNotif
+    
+    -- Glow effect
+    local glow = Instance.new("Frame")
+    glow.Size = UDim2.new(1.05, 0, 1.05, 0)
+    glow.Position = UDim2.new(-0.025, 0, -0.025, 0)
+    glow.BackgroundColor3 = color
+    glow.BackgroundTransparency = 0.9
+    glow.BorderSizePixel = 0
+    glow.ZIndex = bigNotif.ZIndex - 1
+    glow.Parent = bigNotif
+    
+    local glowCorner = Instance.new("UICorner")
+    glowCorner.CornerRadius = UDim.new(0, 18)
+    glowCorner.Parent = glow
+    
+    -- Title
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Size = UDim2.new(1, -20, 0, 50)
+    titleLabel.Position = UDim2.new(0, 10, 0, 10)
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.Text = title
+    titleLabel.TextColor3 = color
+    titleLabel.TextScaled = true
+    titleLabel.Font = Enum.Font.GothamBold
+    titleLabel.Parent = bigNotif
+    
+    -- Message
+    local messageLabel = Instance.new("TextLabel")
+    messageLabel.Size = UDim2.new(1, -20, 0, 60)
+    messageLabel.Position = UDim2.new(0, 10, 0, 60)
+    messageLabel.BackgroundTransparency = 1
+    messageLabel.Text = message
+    messageLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    messageLabel.TextScaled = true
+    messageLabel.Font = Enum.Font.Gotham
+    messageLabel.TextWrapped = true
+    messageLabel.Parent = bigNotif
+    
+    if showButtons then
+        -- Accept Button
+        local acceptBtn = Instance.new("TextButton")
+        acceptBtn.Size = UDim2.new(0.4, 0, 0, 40)
+        acceptBtn.Position = UDim2.new(0.05, 0, 0, 140)
+        acceptBtn.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+        acceptBtn.BorderSizePixel = 0
+        acceptBtn.Text = "✅ TERIMA"
+        acceptBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        acceptBtn.TextScaled = true
+        acceptBtn.Font = Enum.Font.GothamBold
+        acceptBtn.Parent = bigNotif
+        
+        local acceptCorner = Instance.new("UICorner")
+        acceptCorner.CornerRadius = UDim.new(0, 8)
+        acceptCorner.Parent = acceptBtn
+        
+        -- Decline Button
+        local declineBtn = Instance.new("TextButton")
+        declineBtn.Size = UDim2.new(0.4, 0, 0, 40)
+        declineBtn.Position = UDim2.new(0.55, 0, 0, 140)
+        declineBtn.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
+        declineBtn.BorderSizePixel = 0
+        declineBtn.Text = "❌ TOLAK"
+        declineBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        declineBtn.TextScaled = true
+        declineBtn.Font = Enum.Font.GothamBold
+        declineBtn.Parent = bigNotif
+        
+        local declineCorner = Instance.new("UICorner")
+        declineCorner.CornerRadius = UDim.new(0, 8)
+        declineCorner.Parent = declineBtn
+        
+        acceptBtn.MouseButton1Click:Connect(function()
+            animateButton(acceptBtn, 0.9)
+            bigNotif:Destroy()
+            if onAccept then onAccept() end
+        end)
+        
+        declineBtn.MouseButton1Click:Connect(function()
+            animateButton(declineBtn, 0.9)
+            bigNotif:Destroy()
+            if onDecline then onDecline() end
+        end)
+        
+        -- Auto close after 15 seconds
+        spawn(function()
+            wait(15)
+            if bigNotif.Parent then
+                bigNotif:Destroy()
+                if onDecline then onDecline() end
+            end
+        end)
+    else
+        -- Auto close after 3 seconds
+        spawn(function()
+            wait(3)
+            if bigNotif.Parent then
+                bigNotif:Destroy()
+            end
+        end)
+    end
+    
+    -- Scale in animation
+    bigNotif.Size = UDim2.new(0, 0, 0, 0)
+    local scaleIn = TweenService:Create(bigNotif, TweenInfo.new(0.5, Enum.EasingStyle.Back), {Size = UDim2.new(0, 400, 0, 200)})
+    scaleIn:Play()
+end
+
+-- ==========================================
+-- FUNGSI UI UTAMA
+-- ==========================================
+local function createCarryGUI()
+    if CarryGUI then
+        CarryGUI:Destroy()
+    end
+    
+    CarryGUI = Instance.new("ScreenGui")
+    CarryGUI.Name = "CarryReceiverGUI"
+    CarryGUI.ResetOnSpawn = false
+    CarryGUI.Parent = PlayerGui
+    
+    -- Main Frame
+    local mainFrame = Instance.new("Frame")
+    mainFrame.Name = "MainFrame"
+    mainFrame.Size = UDim2.new(0, 350, 0, 160)
+    mainFrame.Position = UDim2.new(1, -370, 0, 20)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(25, 35, 45)
+    mainFrame.BorderSizePixel = 0
+    mainFrame.Parent = CarryGUI
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 12)
+    corner.Parent = mainFrame
+    
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(255, 64, 128)
+    stroke.Thickness = 2
+    stroke.Parent = mainFrame
+    
+    -- Header
+    local header = Instance.new("TextLabel")
+    header.Size = UDim2.new(1, 0, 0, 40)
+    header.Position = UDim2.new(0, 0, 0, 0)
+    header.BackgroundColor3 = Color3.fromRGB(255, 64, 128)
+    header.BorderSizePixel = 0
+    header.Text = "🎯 CARRY RECEIVER - DEVICE B"
+    header.TextColor3 = Color3.fromRGB(255, 255, 255)
+    header.TextScaled = true
+    header.Font = Enum.Font.GothamBold
+    header.Parent = mainFrame
+    
+    local headerCorner = Instance.new("UICorner")
+    headerCorner.CornerRadius = UDim.new(0, 12)
+    headerCorner.Parent = header
+    
+    local headerFix = Instance.new("Frame")
+    headerFix.Size = UDim2.new(1, 0, 0, 12)
+    headerFix.Position = UDim2.new(0, 0, 1, -12)
+    headerFix.BackgroundColor3 = Color3.fromRGB(255, 64, 128)
+    headerFix.BorderSizePixel = 0
+    headerFix.Parent = header
+    
+    -- Status Label
+    local statusLabel = Instance.new("TextLabel")
+    statusLabel.Name = "StatusLabel"
+    statusLabel.Size = UDim2.new(1, -20, 0, 40)
+    statusLabel.Position = UDim2.new(0, 10, 0, 50)
+    statusLabel.BackgroundTransparency = 1
+    statusLabel.Text = "📡 Menunggu request carry..."
+    statusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+    statusLabel.TextScaled = true
+    statusLabel.Font = Enum.Font.Gotham
+    statusLabel.TextWrapped = true
+    statusLabel.Parent = mainFrame
+    
+    -- Force Stop Button (untuk emergency)
+    local forceStopButton = Instance.new("TextButton")
+    forceStopButton.Name = "ForceStopButton"
+    forceStopButton.Size = UDim2.new(1, -20, 0, 35)
+    forceStopButton.Position = UDim2.new(0, 10, 0, 100)
+    forceStopButton.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
+    forceStopButton.BorderSizePixel = 0
+    forceStopButton.Text = "🚨 FORCE STOP"
+    forceStopButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    forceStopButton.TextScaled = true
+    forceStopButton.Font = Enum.Font.GothamBold
+    forceStopButton.Visible = false
+    forceStopButton.Parent = mainFrame
+    
+    local stopCorner = Instance.new("UICorner")
+    stopCorner.CornerRadius = UDim.new(0, 8)
+    stopCorner.Parent = forceStopButton
+    
+    -- Info label
+    local infoLabel = Instance.new("TextLabel")
+    infoLabel.Size = UDim2.new(1, -20, 0, 20)
+    infoLabel.Position = UDim2.new(0, 10, 1, -25)
+    infoLabel.BackgroundTransparency = 1
+    infoLabel.Text = "Device B | Press R to toggle"
+    infoLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+    infoLabel.TextScaled = true
+    infoLabel.Font = Enum.Font.Gotham
+    infoLabel.Parent = mainFrame
+    
+    -- Event handlers
+    forceStopButton.MouseButton1Click:Connect(function()
+        animateButton(forceStopButton, 0.9)
+        stopBeingCarried()
+    end)
+    
+    return mainFrame, statusLabel, forceStopButton
+end
+
+-- ==========================================
+-- FUNGSI MONITORING REQUEST (REALTIME)
+-- ==========================================
+local function startRequestMonitoring()
+    requestCheckConnection = RunService.Heartbeat:Connect(function()
+        if not isBeingCarried and LocalPlayer.Character then
+            -- Check untuk carry request signals
+            for _, child in pairs(LocalPlayer.Character:GetChildren()) do
+                if child.Name:find("CarryRequest_") and child:IsA("StringValue") then
+                    local senderId = child.Name:split("_")[2]
+                    local data = child.Value:split("|")
+                    local senderName = data[1]
+                    local senderDisplay = data[2]
+                    local timestamp = tonumber(data[3])
+                    
+                    -- Hapus signal lama (lebih dari 30 detik)
+                    if tick() - timestamp > 30 then
+                        child:Destroy()
+                        return
+                    end
+                    
+                    -- Show request notification
+                    currentRequest = {
+                        sender = Players:FindFirstChild(senderName),
+                        senderName = senderName,
+                        senderDisplay = senderDisplay,
+                        senderId = senderId,
+                        signal = child
+                    }
+                    
+                    -- Update status
+                    if CarryGUI and CarryGUI:FindFirstChild("MainFrame") then
+                        CarryGUI.MainFrame.StatusLabel.Text = "🔔 Request dari " .. senderDisplay
+                        CarryGUI.MainFrame.StatusLabel.TextColor3 = Color3.fromRGB(255, 193, 7)
+                    end
+                    
+                    -- Show big notification with buttons
+                    createBigNotification(
+                        "🤝 CARRY REQUEST",
+                        senderDisplay .. " (" .. senderName .. ") ingin menggendong Anda!\n\nApakah Anda setuju?",
+                        Color3.fromRGB(255, 193, 7),
+                        true,
+                        function() acceptCarryRequest() end,
+                        function() declineCarryRequest() end
+                    )
+                    
+                    createNotification("🔔 New carry request!", Color3.fromRGB(255, 193, 7))
+                    break
+                end
+            end
+        end
+    end)
+end
+
+-- ==========================================
+-- FUNGSI CARRY LOGIC
+-- ==========================================
+function acceptCarryRequest()
+    if not currentRequest or not currentRequest.sender then
+        return
+    end
+    
+    carrierPlayer = currentRequest.sender
+    
+    -- Kirim response ke Device A
+    local responseSignal = Instance.new("StringValue")
+    responseSignal.Name = "CarryResponse_" .. LocalPlayer.UserId
+    responseSignal.Value = "ACCEPT"
+    responseSignal.Parent = carrierPlayer.Character
+    
+    -- Hapus request signal
+    if currentRequest.signal then
+        currentRequest.signal:Destroy()
+    end
+    
+    -- Update status
+    if CarryGUI and CarryGUI:FindFirstChild("MainFrame") then
+        CarryGUI.MainFrame.StatusLabel.Text = "🤝 Digendong oleh " .. carrierPlayer.DisplayName
+        CarryGUI.MainFrame.StatusLabel.TextColor3 = Color3.fromRGB(46, 204, 113)
+        CarryGUI.MainFrame.ForceStopButton.Visible = true
+    end
+    
+    createBigNotification(
+        "✅ REQUEST DITERIMA",
+        "Anda sekarang digendong oleh " .. carrierPlayer.DisplayName,
+        Color3.fromRGB(46, 204, 113),
+        false
+    )
+    
+    isBeingCarried = true
+    currentRequest = nil
+    
+    -- Disable character control
+    if LocalPlayer.Character then
+        local humanoid = LocalPlayer.Character:FindFirstChild("Humanoid")
+        if humanoid then
+            humanoid.PlatformStand = true
+            humanoid.WalkSpeed = 0
+            humanoid.JumpPower = 0
+            humanoid.JumpHeight = 0
+        end
+    end
+end
+
+function declineCarryRequest()
+    if not currentRequest or not currentRequest.sender then
+        return
+    end
+    
+    -- Kirim response ke Device A
+    local responseSignal = Instance.new("StringValue")
+    responseSignal.Name = "CarryResponse_" .. LocalPlayer.UserId
+    responseSignal.Value = "DECLINE"
+    responseSignal.Parent = currentRequest.sender.Character
+    
+    -- Hapus request signal
+    if currentRequest.signal then
+        currentRequest.signal:Destroy()
+    end
+    
+    createBigNotification(
+        "❌ REQUEST DITOLAK", 
+        "Anda menolak request dari " .. currentRequest.senderDisplay,
+        Color3.fromRGB(231, 76, 60),
+        false
+    )
+    
+    -- Reset status
+    if CarryGUI and CarryGUI:FindFirstChild("MainFrame") then
+        CarryGUI.MainFrame.StatusLabel.Text = "📡 Menunggu request carry..."
+        CarryGUI.MainFrame.StatusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+    end
+    
+    currentRequest = nil
+end
+
+function stopBeingCarried()
+    isBeingCarried = false
+    
+    -- Restore character control
+    if LocalPlayer.Character then
+        local humanoid = LocalPlayer.Character:FindFirstChild("Humanoid")
+        if humanoid then
+            humanoid.PlatformStand = false
+            humanoid.WalkSpeed = 16
+            humanoid.JumpPower = 50
+            humanoid.JumpHeight = 7.2
+        end
+    end
+    
+    -- Reset UI
+    if CarryGUI and CarryGUI:FindFirstChild("MainFrame") then
+        CarryGUI.MainFrame.StatusLabel.Text = "📡 Menunggu request carry..."
+        CarryGUI.MainFrame.StatusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+        CarryGUI.MainFrame.ForceStopButton.Visible = false
+    end
+    
+    createNotification("🔄 Tidak lagi digendong", Color3.fromRGB(255, 193, 7))
+    carrierPlayer = nil
+end
+
+-- ==========================================
+-- HANDLE UPDATE DARI DEVICE A
+-- ==========================================
+carryUpdateEvent.OnClientEvent:Connect(function(action, position, lookVector)
+    if action == "UPDATE" and isBeingCarried then
+        -- Position update handled by Device A's BodyPosition
+    elseif action == "STOP" then
+        stopBeingCarried()
+    end
+end)
+
+-- ==========================================
+-- FUNGSI DRAG GUI
+-- ==========================================
+local function makeDraggable(frame)
+    local dragToggle = nil
+    local dragStart = nil
+    local startPos = nil
+    
+    frame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragToggle = true
+            dragStart = input.Position
+            startPos = frame.Position
+        end
+    end)
+    
+    frame.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragToggle = false
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement and dragToggle then
+            local delta = input.Position - dragStart
+            frame.Position = UDim2.new(
+                startPos.X.Scale,
+                startPos.X.Offset + delta.X,
+                startPos.Y.Scale,
+                startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+end
+
+-- ==========================================
+-- KEYBINDS
+-- ==========================================
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if input.KeyCode == Enum.KeyCode.R then
+        if CarryGUI then
+            CarryGUI.MainFrame.Visible = not CarryGUI.MainFrame.Visible
+        end
+    elseif input.KeyCode == Enum.KeyCode.Y then
+        if currentRequest then
+            acceptCarryRequest()
+        end
+    elseif input.KeyCode == Enum.KeyCode.N then
+        if currentRequest then
+            declineCarryRequest()
+        end
+    elseif input.KeyCode == Enum.KeyCode.T then
+        if isBeingCarried then
+            stopBeingCarried()
+        end
+    end
+end)
+
+-- ==========================================
+-- CLEANUP
+-- ==========================================
+Players.PlayerRemoving:Connect(function(player)
+    if player == carrierPlayer then
+        stopBeingCarried()
+    end
+    if currentRequest and currentRequest.sender == player then
+        currentRequest = nil
+    end
+end)
+
+LocalPlayer.CharacterRemoving:Connect(function()
+    stopBeingCarried()
+    currentRequest = nil
+end)
+
+-- ==========================================
+-- INISIALISASI
+-- ==========================================
+local function initialize()
+    wait(2) -- Tunggu character spawn
+    
+    local mainFrame, statusLabel, forceStopButton = createCarryGUI()
+    makeDraggable(mainFrame)
+    startRequestMonitoring()
+    
+    createNotification("🎯 Device B Ready!", Color3.fromRGB(255, 64, 128))
+    
+    print("=== CARRY RECEIVER DEVICE B LOADED ===")
+    print("📱 Controls:")
+    print("   R - Toggle GUI")
+    print("   Y - Quick Accept")
+    print("   N - Quick Decline")
+    print("   T - Force Stop")
+    print("🗻 Mountain map optimized")
+    print("✨ Ready to receive carry requests!")
+end
+
+-- Start script
+spawn(initialize)
