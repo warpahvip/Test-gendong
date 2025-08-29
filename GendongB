@@ -1,510 +1,416 @@
+
+-- SCRIPT 2 - UNTUK HP KEDUA (RECEIVER) 
+-- Copy script ini dan execute di HP kedua
 -- ==========================================
--- DEVICE B - CARRY RECEIVER (EXECUTOR COMPATIBLE)
--- Script untuk Delta Executor - UI Minimalis
 -- ==========================================
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
-local HttpService = game:GetService("HttpService")
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
--- ==========================================
--- VARIABEL GLOBAL
--- ==========================================
-local CarryGUI = nil
-local isBeingCarried = false
+local isAttached = false
 local carrierPlayer = nil
-local currentRequest = nil
 local monitorConnection = nil
 
--- ==========================================
--- UI MINIMALIS
--- ==========================================
-local function createMinimalistGUI()
-    if CarryGUI then CarryGUI:Destroy() end
+-- Create GUI for HP 2
+local function createReceiverGUI()
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "ReceiverGUI"
+    gui.Parent = PlayerGui
     
-    CarryGUI = Instance.new("ScreenGui")
-    CarryGUI.Name = "CarryReceiverGUI"
-    CarryGUI.ResetOnSpawn = false
-    CarryGUI.Parent = PlayerGui
-    
-    -- Main frame - compact
-    local mainFrame = Instance.new("Frame")
-    mainFrame.Size = UDim2.new(0, 160, 0, 60)
-    mainFrame.Position = UDim2.new(1, -170, 0, 10)
-    mainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-    mainFrame.BorderSizePixel = 0
-    mainFrame.Parent = CarryGUI
-    
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 6)
-    corner.Parent = mainFrame
-    
-    -- Border accent
-    local stroke = Instance.new("UIStroke")
-    stroke.Color = Color3.fromRGB(255, 80, 120)
-    stroke.Thickness = 1
-    stroke.Transparency = 0.3
-    stroke.Parent = mainFrame
-    
-    -- Header strip
-    local headerStrip = Instance.new("Frame")
-    headerStrip.Size = UDim2.new(1, 0, 0, 3)
-    headerStrip.Position = UDim2.new(0, 0, 0, 0)
-    headerStrip.BackgroundColor3 = Color3.fromRGB(255, 80, 120)
-    headerStrip.BorderSizePixel = 0
-    headerStrip.Parent = mainFrame
-    
-    local stripCorner = Instance.new("UICorner")
-    stripCorner.CornerRadius = UDim.new(0, 6)
-    stripCorner.Parent = headerStrip
-    
-    -- Status label
-    local statusLabel = Instance.new("TextLabel")
-    statusLabel.Name = "StatusLabel"
-    statusLabel.Size = UDim2.new(1, -10, 0, 30)
-    statusLabel.Position = UDim2.new(0, 5, 0, 8)
-    statusLabel.BackgroundTransparency = 1
-    statusLabel.Text = "Waiting for request..."
-    statusLabel.TextColor3 = Color3.fromRGB(170, 170, 170)
-    statusLabel.TextSize = 10
-    statusLabel.Font = Enum.Font.Gotham
-    statusLabel.TextWrapped = true
-    statusLabel.Parent = mainFrame
-    
-    -- Force stop button (hidden initially)
-    local forceStopButton = Instance.new("TextButton")
-    forceStopButton.Name = "ForceStopButton"
-    forceStopButton.Size = UDim2.new(0.8, 0, 0, 20)
-    forceStopButton.Position = UDim2.new(0.1, 0, 0, 35)
-    forceStopButton.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
-    forceStopButton.BorderSizePixel = 0
-    forceStopButton.Text = "FORCE STOP"
-    forceStopButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    forceStopButton.TextSize = 9
-    forceStopButton.Font = Enum.Font.GothamBold
-    forceStopButton.Visible = false
-    forceStopButton.Parent = mainFrame
-    
-    local stopCorner = Instance.new("UICorner")
-    stopCorner.CornerRadius = UDim.new(0, 3)
-    stopCorner.Parent = forceStopButton
-    
-    -- Device label
-    local deviceLabel = Instance.new("TextLabel")
-    deviceLabel.Size = UDim2.new(1, 0, 0, 15)
-    deviceLabel.Position = UDim2.new(0, 0, 1, -15)
-    deviceLabel.BackgroundTransparency = 1
-    deviceLabel.Text = "Device B"
-    deviceLabel.TextColor3 = Color3.fromRGB(100, 100, 100)
-    deviceLabel.TextSize = 8
-    deviceLabel.Font = Enum.Font.Gotham
-    deviceLabel.TextXAlignment = Enum.TextXAlignment.Center
-    deviceLabel.Parent = mainFrame
-    
-    return mainFrame, statusLabel, forceStopButton
-end
-
--- ==========================================
--- NOTIFIKASI MINIMALIS
--- ==========================================
-local function showNotification(text, color, duration)
-    local notif = Instance.new("Frame")
-    notif.Size = UDim2.new(0, 200, 0, 35)
-    notif.Position = UDim2.new(1, 220, 0.3, -17)
-    notif.BackgroundColor3 = color or Color3.fromRGB(70, 70, 70)
-    notif.BorderSizePixel = 0
-    notif.Parent = PlayerGui
-    
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 4)
-    corner.Parent = notif
-    
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, -10, 1, 0)
-    label.Position = UDim2.new(0, 5, 0, 0)
-    label.BackgroundTransparency = 1
-    label.Text = text
-    label.TextColor3 = Color3.fromRGB(255, 255, 255)
-    label.TextSize = 11
-    label.Font = Enum.Font.Gotham
-    label.TextWrapped = true
-    label.Parent = notif
-    
-    -- Slide animation
-    local slideIn = TweenService:Create(notif, TweenInfo.new(0.3), {Position = UDim2.new(1, -210, 0.3, -17)})
-    slideIn:Play()
-    
-    game:GetService("Debris"):AddItem(notif, duration or 2.5)
-end
-
--- ==========================================
--- REQUEST POPUP MINIMALIS
--- ==========================================
-local function showRequestPopup(senderName, senderDisplay, onAccept, onDecline)
-    local popup = Instance.new("Frame")
-    popup.Size = UDim2.new(0, 280, 0, 120)
-    popup.Position = UDim2.new(0.5, -140, 0.5, -60)
-    popup.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-    popup.BorderSizePixel = 0
-    popup.Parent = PlayerGui
-    popup.ZIndex = 20
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 180, 0, 70)
+    frame.Position = UDim2.new(1, -190, 0, 10)
+    frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    frame.BorderSizePixel = 0
+    frame.Parent = gui
     
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 8)
-    corner.Parent = popup
+    corner.Parent = frame
     
     local stroke = Instance.new("UIStroke")
-    stroke.Color = Color3.fromRGB(255, 180, 0)
+    stroke.Color = Color3.fromRGB(255, 100, 150)
     stroke.Thickness = 2
-    stroke.Parent = popup
+    stroke.Parent = frame
     
-    -- Title
     local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, -10, 0, 25)
-    title.Position = UDim2.new(0, 5, 0, 5)
-    title.BackgroundTransparency = 1
-    title.Text = "CARRY REQUEST"
-    title.TextColor3 = Color3.fromRGB(255, 180, 0)
+    title.Size = UDim2.new(1, 0, 0, 25)
+    title.BackgroundColor3 = Color3.fromRGB(255, 100, 150)
+    title.Text = "HP 2 - RECEIVER"
+    title.TextColor3 = Color3.white
     title.TextSize = 12
     title.Font = Enum.Font.GothamBold
-    title.Parent = popup
+    title.TextXAlignment = Enum.TextXAlignment.Center
+    title.Parent = frame
     
-    -- Message
-    local message = Instance.new("TextLabel")
-    message.Size = UDim2.new(1, -10, 0, 40)
-    message.Position = UDim2.new(0, 5, 0, 30)
-    message.BackgroundTransparency = 1
-    message.Text = senderDisplay .. " wants to carry you"
-    message.TextColor3 = Color3.fromRGB(200, 200, 200)
-    message.TextSize = 11
-    message.Font = Enum.Font.Gotham
-    message.TextWrapped = true
-    message.Parent = popup
+    local titleCorner = Instance.new("UICorner")
+    titleCorner.CornerRadius = UDim.new(0, 8)
+    titleCorner.Parent = title
     
-    -- Accept button
-    local acceptBtn = Instance.new("TextButton")
-    acceptBtn.Size = UDim2.new(0.45, 0, 0, 30)
-    acceptBtn.Position = UDim2.new(0.05, 0, 0, 80)
-    acceptBtn.BackgroundColor3 = Color3.fromRGB(40, 160, 90)
-    acceptBtn.BorderSizePixel = 0
-    acceptBtn.Text = "ACCEPT"
-    acceptBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    acceptBtn.TextSize = 10
-    acceptBtn.Font = Enum.Font.GothamBold
-    acceptBtn.Parent = popup
+    local status = Instance.new("TextLabel")
+    status.Name = "Status"
+    status.Size = UDim2.new(1, -10, 0, 40)
+    status.Position = UDim2.new(0, 5, 0, 30)
+    status.BackgroundTransparency = 1
+    status.Text = "Siap digendong..."
+    status.TextColor3 = Color3.fromRGB(200, 200, 200)
+    status.TextSize = 11
+    status.Font = Enum.Font.Gotham
+    status.TextXAlignment = Enum.TextXAlignment.Center
+    status.Parent = frame
     
-    local acceptCorner = Instance.new("UICorner")
-    acceptCorner.CornerRadius = UDim.new(0, 4)
-    acceptCorner.Parent = acceptBtn
-    
-    -- Decline button
-    local declineBtn = Instance.new("TextButton")
-    declineBtn.Size = UDim2.new(0.45, 0, 0, 30)
-    declineBtn.Position = UDim2.new(0.5, 0, 0, 80)
-    declineBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
-    declineBtn.BorderSizePixel = 0
-    declineBtn.Text = "DECLINE"
-    declineBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    declineBtn.TextSize = 10
-    declineBtn.Font = Enum.Font.GothamBold
-    declineBtn.Parent = popup
-    
-    local declineCorner = Instance.new("UICorner")
-    declineCorner.CornerRadius = UDim.new(0, 4)
-    declineCorner.Parent = declineBtn
-    
-    -- Button events
-    acceptBtn.MouseButton1Click:Connect(function()
-        popup:Destroy()
-        if onAccept then onAccept() end
-    end)
-    
-    declineBtn.MouseButton1Click:Connect(function()
-        popup:Destroy()
-        if onDecline then onDecline() end
-    end)
-    
-    -- Auto decline after 15 seconds
-    spawn(function()
-        wait(15)
-        if popup.Parent then
-            popup:Destroy()
-            if onDecline then onDecline() end
-        end
-    end)
-    
-    -- Scale in animation
-    popup.Size = UDim2.new(0, 0, 0, 0)
-    local scaleIn = TweenService:Create(popup, TweenInfo.new(0.4, Enum.EasingStyle.Back), {Size = UDim2.new(0, 280, 0, 120)})
-    scaleIn:Play()
+    return frame, status
 end
 
--- ==========================================
--- CARRY LOGIC
--- ==========================================
-local function acceptCarryRequest()
-    if not currentRequest then return end
+-- Attach to carrier
+local function attachToCarrier(carrier)
+    if isAttached then return end
     
-    carrierPlayer = currentRequest.sender
-    isBeingCarried = true
+    isAttached = true
+    carrierPlayer = carrier
     
-    -- Send response
-    local responseSignal = Instance.new("StringValue")
-    responseSignal.Name = "CarryResponse_" .. currentRequest.requestId
-    responseSignal.Value = "ACCEPT|" .. tick()
-    responseSignal.Parent = workspace
+    local myChar = LocalPlayer.Character
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    local myHumanoid = myChar:FindFirstChild("Humanoid")
     
-    game:GetService("Debris"):AddItem(responseSignal, 10)
-    
-    -- Update UI
-    if CarryGUI and CarryGUI:FindFirstChild("MainFrame") then
-        CarryGUI.MainFrame.StatusLabel.Text = "Being carried by " .. carrierPlayer.DisplayName
-        CarryGUI.MainFrame.StatusLabel.TextColor3 = Color3.fromRGB(40, 160, 90)
-        CarryGUI.MainFrame.ForceStopButton.Visible = true
+    if myRoot and myHumanoid then
+        -- Disable movement
+        myHumanoid.PlatformStand = true
+        myHumanoid.WalkSpeed = 0
+        myHumanoid.JumpPower = 0
+        
+        -- Create BodyPosition for smooth following
+        local bodyPos = Instance.new("BodyPosition")
+        bodyPos.MaxForce = Vector3.new(4000, 4000, 4000)
+        bodyPos.D = 2500
+        bodyPos.P = 12000
+        bodyPos.Parent = myRoot
+        
+        -- Update position loop
+        spawn(function()
+            while isAttached and carrierPlayer and carrierPlayer.Character do
+                local carrierRoot = carrierPlayer.Character:FindFirstChild("HumanoidRootPart")
+                if carrierRoot and bodyPos then
+                    local carrierCFrame = carrierRoot.CFrame
+                    local shoulderPos = carrierCFrame.Position + carrierCFrame.UpVector * 1.7 + carrierCFrame.RightVector * 1.3
+                    bodyPos.Position = shoulderPos
+                else
+                    break
+                end
+                wait(0.1)
+            end
+        end)
     end
     
-    -- Disable character control
-    if LocalPlayer.Character then
-        local humanoid = LocalPlayer.Character:FindFirstChild("Humanoid")
-        if humanoid then
-            humanoid.PlatformStand = true
-            humanoid.WalkSpeed = 0
-            humanoid.JumpPower = 0
-            humanoid.JumpHeight = 0
-        end
-    end
-    
-    showNotification("Request accepted", Color3.fromRGB(40, 160, 90))
-    currentRequest = nil
+    print("Attached to " .. carrier.Name)
 end
 
-local function declineCarryRequest()
-    if not currentRequest then return end
+-- Detach from carrier  
+local function detachFromCarrier()
+    if not isAttached then return end
     
-    -- Send decline response
-    local responseSignal = Instance.new("StringValue")
-    responseSignal.Name = "CarryResponse_" .. currentRequest.requestId
-    responseSignal.Value = "DECLINE|" .. tick()
-    responseSignal.Parent = workspace
+    isAttached = false
     
-    game:GetService("Debris"):AddItem(responseSignal, 10)
-    
-    showNotification("Request declined", Color3.fromRGB(200, 60, 60))
-    currentRequest = nil
-end
-
-local function stopBeingCarried()
-    isBeingCarried = false
-    
-    -- Restore character control
-    if LocalPlayer.Character then
-        local humanoid = LocalPlayer.Character:FindFirstChild("Humanoid")
-        local rootPart = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    local myChar = LocalPlayer.Character
+    if myChar then
+        local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+        local myHumanoid = myChar:FindFirstChild("Humanoid")
         
-        if humanoid then
-            humanoid.PlatformStand = false
-            humanoid.WalkSpeed = 16
-            humanoid.JumpPower = 50
-            humanoid.JumpHeight = 7.2
-        end
-        
-        if rootPart then
-            -- Remove body movers
-            for _, obj in pairs(rootPart:GetChildren()) do
-                if obj:IsA("BodyPosition") or obj:IsA("BodyAngularVelocity") then
+        -- Remove BodyPosition
+        if myRoot then
+            for _, obj in pairs(myRoot:GetChildren()) do
+                if obj:IsA("BodyPosition") then
                     obj:Destroy()
                 end
             end
         end
+        
+        -- Restore movement
+        if myHumanoid then
+            myHumanoid.PlatformStand = false
+            myHumanoid.WalkSpeed = 16
+            myHumanoid.JumpPower = 50
+        end
     end
     
-    -- Update UI
-    if CarryGUI and CarryGUI:FindFirstChild("MainFrame") then
-        CarryGUI.MainFrame.StatusLabel.Text = "Waiting for request..."
-        CarryGUI.MainFrame.StatusLabel.TextColor3 = Color3.fromRGB(170, 170, 170)
-        CarryGUI.MainFrame.ForceStopButton.Visible = false
-    end
-    
-    showNotification("Stopped being carried", Color3.fromRGB(255, 180, 0))
     carrierPlayer = nil
+    print("Detached from carrier")
 end
 
--- ==========================================
--- MONITOR REQUESTS & UPDATES
--- ==========================================
+-- Monitor signals
 local function startMonitoring()
     monitorConnection = RunService.Heartbeat:Connect(function()
-        -- Check untuk carry requests
-        if not isBeingCarried and not currentRequest then
-            for _, obj in pairs(workspace:GetChildren()) do
-                if obj.Name:find("CarryRequest_") and obj:IsA("StringValue") then
-                    local data = obj.Value:split("|")
-                    if #data >= 3 then
-                        local senderId = tonumber(data[1])
-                        local targetId = tonumber(data[2])
-                        local timestamp = tonumber(data[3])
-                        
-                        -- Check if request is for this player
-                        if targetId == LocalPlayer.UserId then
-                            -- Check if request is not too old
-                            if tick() - timestamp < 30 then
-                                local sender = Players:GetPlayerByUserId(senderId)
-                                if sender then
-                                    currentRequest = {
-                                        sender = sender,
-                                        requestId = obj.Name:split("_")[2],
-                                        timestamp = timestamp
-                                    }
-                                    
-                                    -- Show popup
-                                    showRequestPopup(
-                                        sender.Name,
-                                        sender.DisplayName,
-                                        acceptCarryRequest,
-                                        declineCarryRequest
-                                    )
-                                    
-                                    -- Update status
-                                    if CarryGUI and CarryGUI:FindFirstChild("MainFrame") then
-                                        CarryGUI.MainFrame.StatusLabel.Text = "Request from " .. sender.DisplayName
-                                        CarryGUI.MainFrame.StatusLabel.TextColor3 = Color3.fromRGB(255, 180, 0)
-                                    end
-                                    
-                                    showNotification("New carry request!", Color3.fromRGB(255, 180, 0))
-                                end
-                            end
-                            
-                            obj:Destroy()
-                            break
-                        end
-                    end
-                end
-            end
-        end
-        
-        -- Check untuk carry updates
-        if isBeingCarried and carrierPlayer then
-            for _, obj in pairs(workspace:GetChildren()) do
-                if obj.Name == "CarryUpdate_" .. carrierPlayer.UserId and obj:IsA("StringValue") then
-                    local data = obj.Value:split("|")
-                    if #data >= 3 and data[1] == tostring(LocalPlayer.UserId) then
-                        local action = data[2]
-                        if action == "UPDATE" then
-                            -- Position update handled by Device A's BodyPosition
-                        end
-                    end
-                end
-            end
-        end
-        
-        -- Check untuk stop signals
-        if isBeingCarried then
-            for _, obj in pairs(workspace:GetChildren()) do
-                if obj.Name:find("CarryStop_") and obj:IsA("StringValue") then
-                    local data = obj.Value:split("|")
-                    if #data >= 2 and data[1] == tostring(LocalPlayer.UserId) and data[2] == "STOP" then
-                        stopBeingCarried()
+        -- Check for carry signals
+        for _, obj in pairs(workspace:GetChildren()) do
+            if obj.Name == "CarrySignal" and obj:IsA("StringValue") then
+                local data = obj.Value:split(":")
+                if data[1] == "START" then
+                    local carrierId = tonumber(data[2])
+                    local carrier = Players:GetPlayerByUserId(carrierId)
+                    if carrier and carrier ~= LocalPlayer then
+                        attachToCarrier(carrier)
                         obj:Destroy()
-                        break
                     end
+                end
+            end
+            
+            -- Check for stop signals
+            if obj.Name == "StopSignal" and obj:IsA("StringValue") then
+                local data = obj.Value:split(":")
+                if data[1] == "STOP" then
+                    detachFromCarrier()
+                    obj:Destroy()
                 end
             end
         end
     end)
 end
 
--- ==========================================
--- DRAG FUNCTIONALITY
--- ==========================================
-local function makeDraggable(frame)
-    local dragToggle = nil
-    local dragStart = nil
-    local startPos = nil
+-- Auto-attach to first available player
+local function autoAttach()
+    wait(2) -- Wait for other scripts to load
     
-    frame.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragToggle = true
-            dragStart = input.Position
-            startPos = frame.Position
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            attachToCarrier(player)
+            break
         end
-    end)
-    
-    frame.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragToggle = false
-        end
-    end)
-    
-    UserInputService.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement and dragToggle then
-            local delta = input.Position - dragStart
-            frame.Position = UDim2.new(
-                startPos.X.Scale,
-                startPos.X.Offset + delta.X,
-                startPos.Y.Scale,
-                startPos.Y.Offset + delta.Y
-            )
-        end
-    end)
+    end
 end
 
+-- Setup
+local mainFrame, statusLabel = createReceiverGUI()
+
+UserInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.T then
+        if isAttached then
+            detachFromCarrier()
+            statusLabel.Text = "Siap digendong..."
+        else
+            autoAttach()
+        end
+    elseif input.KeyCode == Enum.KeyCode.R then
+        mainFrame.Visible = not mainFrame.Visible
+    end
+end)
+
+startMonitoring()
+autoAttach() -- Auto-attach saat script dimulai
+
+print("HP 2 RECEIVER READY - T to toggle attach/detach, R to toggle GUI")
+
 -- ==========================================
--- SETUP GUI & EVENTS
+-- COPY KEDUA SCRIPT DI BAWAH INI SECARA TERPISAH
 -- ==========================================
-local function initialize()
-    local mainFrame, statusLabel, forceStopButton = createMinimalistGUI()
-    makeDraggable(mainFrame)
+
+
+-- ==========================================
+-- SCRIPT 2 - UNTUK HP KEDUA (RECEIVER)  
+-- Copy script ini dan execute di HP kedua
+-- ==========================================
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+local isAttached = false
+local carrierPlayer = nil
+local monitorConnection = nil
+
+-- Create GUI for receiver
+local function createReceiverGUI()
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "ReceiverGUI"
+    gui.Parent = PlayerGui
     
-    -- Force stop button event
-    forceStopButton.MouseButton1Click:Connect(function()
-        stopBeingCarried()
-    end)
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 180, 0, 70)
+    frame.Position = UDim2.new(1, -190, 0, 10)
+    frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    frame.BorderSizePixel = 0
+    frame.Parent = gui
     
-    -- Keybinds
-    UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if gameProcessed then return end
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = frame
+    
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(255, 100, 150)
+    stroke.Thickness = 2
+    stroke.Parent = frame
+    
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, 0, 0, 25)
+    title.BackgroundColor3 = Color3.fromRGB(255, 100, 150)
+    title.Text = "HP 2 - RECEIVER"
+    title.TextColor3 = Color3.white
+    title.TextSize = 12
+    title.Font = Enum.Font.GothamBold
+    title.TextXAlignment = Enum.TextXAlignment.Center
+    title.Parent = frame
+    
+    local titleCorner = Instance.new("UICorner")
+    titleCorner.CornerRadius = UDim.new(0, 8)
+    titleCorner.Parent = title
+    
+    local status = Instance.new("TextLabel")
+    status.Name = "Status"
+    status.Size = UDim2.new(1, -10, 0, 40)
+    status.Position = UDim2.new(0, 5, 0, 30)
+    status.BackgroundTransparency = 1
+    status.Text = "Siap digendong..."
+    status.TextColor3 = Color3.fromRGB(200, 200, 200)
+    status.TextSize = 11
+    status.Font = Enum.Font.Gotham
+    status.TextXAlignment = Enum.TextXAlignment.Center
+    status.Parent = frame
+    
+    return frame, status
+end
+
+-- Attach to carrier
+local function attachToCarrier(carrier)
+    if isAttached then return end
+    
+    isAttached = true
+    carrierPlayer = carrier
+    
+    local myChar = LocalPlayer.Character
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    local myHumanoid = myChar:FindFirstChild("Humanoid")
+    
+    if myRoot and myHumanoid then
+        -- Disable movement
+        myHumanoid.PlatformStand = true
+        myHumanoid.WalkSpeed = 0
+        myHumanoid.JumpPower = 0
         
-        if input.KeyCode == Enum.KeyCode.R then
-            mainFrame.Visible = not mainFrame.Visible
-        elseif input.KeyCode == Enum.KeyCode.Y and currentRequest then
-            acceptCarryRequest()
-        elseif input.KeyCode == Enum.KeyCode.N and currentRequest then
-            declineCarryRequest()
-        elseif input.KeyCode == Enum.KeyCode.T and isBeingCarried then
-            stopBeingCarried()
-        end
-    end)
+        -- Create BodyPosition
+        local bodyPos = Instance.new("BodyPosition")
+        bodyPos.MaxForce = Vector3.new(4000, 4000, 4000)
+        bodyPos.D = 2500
+        bodyPos.P = 12000
+        bodyPos.Parent = myRoot
+        
+        -- Update position
+        spawn(function()
+            while isAttached and carrierPlayer and carrierPlayer.Character do
+                local carrierRoot = carrierPlayer.Character:FindFirstChild("HumanoidRootPart")
+                if carrierRoot and bodyPos and bodyPos.Parent then
+                    local carrierCFrame = carrierRoot.CFrame
+                    local shoulderPos = carrierCFrame.Position + carrierCFrame.UpVector * 1.7 + carrierCFrame.RightVector * 1.3
+                    bodyPos.Position = shoulderPos
+                else
+                    break
+                end
+                wait(0.05)
+            end
+        end)
+    end
     
-    -- Start monitoring
-    startMonitoring()
-    
-    showNotification("Device B Ready - R to toggle", Color3.fromRGB(255, 80, 120))
-    
-    print("=== CARRY RECEIVER LOADED ===")
-    print("R - Toggle GUI | Y - Quick Accept | N - Quick Decline | T - Force Stop")
+    print("Attached to " .. carrier.Name)
 end
 
--- ==========================================
--- CLEANUP
--- ==========================================
-Players.PlayerRemoving:Connect(function(player)
-    if player == carrierPlayer then
-        stopBeingCarried()
+-- Detach
+local function detachFromCarrier()
+    if not isAttached then return end
+    
+    isAttached = false
+    
+    local myChar = LocalPlayer.Character
+    if myChar then
+        local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+        local myHumanoid = myChar:FindFirstChild("Humanoid")
+        
+        -- Remove BodyPosition
+        if myRoot then
+            for _, obj in pairs(myRoot:GetChildren()) do
+                if obj:IsA("BodyPosition") then
+                    obj:Destroy()
+                end
+            end
+        end
+        
+        -- Restore movement
+        if myHumanoid then
+            myHumanoid.PlatformStand = false
+            myHumanoid.WalkSpeed = 16
+            myHumanoid.JumpPower = 50
+        end
     end
-    if currentRequest and currentRequest.sender == player then
-        currentRequest = nil
+    
+    carrierPlayer = nil
+    print("Detached")
+end
+
+-- Monitor signals
+local function startMonitoring()
+    monitorConnection = RunService.Heartbeat:Connect(function()
+        for _, obj in pairs(workspace:GetChildren()) do
+            if obj.Name == "CarrySignal" and obj:IsA("StringValue") then
+                local data = obj.Value:split(":")
+                if data[1] == "START" then
+                    local carrierId = tonumber(data[2])
+                    local carrier = Players:GetPlayerByUserId(carrierId)
+                    if carrier and carrier ~= LocalPlayer then
+                        attachToCarrier(carrier)
+                        obj:Destroy()
+                    end
+                end
+            end
+            
+            if obj.Name == "StopSignal" and obj:IsA("StringValue") then
+                detachFromCarrier()
+                obj:Destroy()
+            end
+        end
+    end)
+end
+
+-- Auto-attach
+local function autoAttach()
+    wait(1)
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            attachToCarrier(player)
+            break
+        end
+    end
+end
+
+-- Setup HP 2
+local mainFrame, statusLabel = createReceiverGUI()
+
+UserInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.T then
+        if isAttached then
+            detachFromCarrier()
+            statusLabel.Text = "Siap digendong..."
+            statusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+        else
+            autoAttach()
+        end
+    elseif input.KeyCode == Enum.KeyCode.R then
+        mainFrame.Visible = not mainFrame.Visible
     end
 end)
 
-LocalPlayer.CharacterRemoving:Connect(function()
-    stopBeingCarried()
-    currentRequest = nil
+startMonitoring()
+
+-- Auto-attach when script runs
+spawn(function()
+    autoAttach()
+    if isAttached and statusLabel then
+        statusLabel.Text = "Tergendong!"
+        statusLabel.TextColor3 = Color3.fromRGB(0, 255, 100)
+    end
 end)
 
--- Start
-initialize()
+print("HP 2 RECEIVER READY - Will auto-attach to HP 1")
